@@ -1,8 +1,10 @@
-# 占位：复制到 LLaMA Factory 安装目录后按实际路径修改。
-# 数据须来自 ModelScope；训练前将 train_file 换成本地 json/jsonl。
+# Qwen3-4B + ccMatrix SFT (LoRA)
+# 运行（在已安装 LLaMAFactory 的 conda env lowres 中）：
+#   llamafactory-cli train /root/lowres_new/training/llamafactory_qwen3_4b_ccmatrix_sft_lora.yaml
 #
-# 示例命令（在 LLaMA Factory 根目录、已激活 venv）:
-#   llamafactory-cli train training/llamafactory_ccmatrix_sft.placeholder.yaml
+# 前置：
+# - 基座模型：/root/lowres_new/models/Qwen3-4B_20260407_033755 （通过 ModelScope 下载）
+# - 训练数据：在 LLaMAFactory 的 data/dataset_info.json 注册 dataset=ccmatrix_mt
 
 ### model
 model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
@@ -16,8 +18,8 @@ lora_rank: 8
 lora_target: all
 
 ### dataset
-dataset: ccmatrix_mt  # 需要在 LLaMAFactory 的 data/dataset_info.json 注册同名数据集（alpaca/sharegpt 均可）
-template: qwen  # 按实际基座改为 llama3 / smollm 等
+dataset: ccmatrix_mt
+template: qwen
 cutoff_len: 512
 overwrite_cache: true
 preprocessing_num_workers: 4
@@ -43,3 +45,4 @@ ddp_timeout: 180000000
 # val_size: 0.01
 # eval_strategy: steps
 # eval_steps: 500
+

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 基座模型评估：请先手动启动对应 vLLM 服务，再执行本脚本。
-# 使用仓库 .venv 中的 Python。
+# 使用 conda 环境 lowres。
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=activate_venv.sh
-source "${SCRIPT_DIR}/activate_venv.sh"
+# shellcheck source=activate_conda_lowres.sh
+source "${SCRIPT_DIR}/activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT}"
 
@@ -14,9 +14,9 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-EMPTY}"
 
 # 选择要评的基座（取消注释其中一组）:
 # --- SmolLM3-3B ---
-# export SERVED_MODEL_NAME=smollm3-3b
-# export EVAL_MODEL_TAG=baseline_smollm3_3b
-# export EVAL_MODEL_FAMILY=generic
+export SERVED_MODEL_NAME=smollm3-3b
+export EVAL_MODEL_TAG=baseline_smollm3_3b
+export EVAL_MODEL_FAMILY=generic
 
 # --- Qwen3-4B（关闭思考模式由 run_eval.py 处理）---
 # export SERVED_MODEL_NAME=qwen3-4b

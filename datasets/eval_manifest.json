@@ -1,0 +1,49 @@
+{
+  "split": "dev",
+  "bidirectional": true,
+  "language_pair_groups": [
+    [
+      "eng_Latn",
+      "zho_Hans"
+    ],
+    [
+      "spa_Latn",
+      "ind_Latn",
+      "vie_Latn",
+      "tha_Thai",
+      "tgl_Latn"
+    ]
+  ],
+  "items_jsonl": "datasets/processed/eval_items_all.jsonl",
+  "item_count": 2500,
+  "source_files": [
+    "datasets/processed/flores_dev_eng_Latn__spa_Latn.jsonl",
+    "datasets/processed/flores_dev_spa_Latn__eng_Latn.jsonl",
+    "datasets/processed/flores_dev_eng_Latn__ind_Latn.jsonl",
+    "datasets/processed/flores_dev_ind_Latn__eng_Latn.jsonl",
+    "datasets/processed/flores_dev_eng_Latn__vie_Latn.jsonl",
+    "datasets/processed/flores_dev_vie_Latn__eng_Latn.jsonl",
+    "datasets/processed/flores_dev_eng_Latn__tha_Thai.jsonl",
+    "datasets/processed/flores_dev_tha_Thai__eng_Latn.jsonl",
+    "datasets/processed/flores_dev_eng_Latn__tgl_Latn.jsonl",
+    "datasets/processed/flores_dev_tgl_Latn__eng_Latn.jsonl",
+    "datasets/processed/flores_dev_zho_Hans__spa_Latn.jsonl",
+    "datasets/processed/flores_dev_spa_Latn__zho_Hans.jsonl",
+    "datasets/processed/flores_dev_zho_Hans__ind_Latn.jsonl",
+    "datasets/processed/flores_dev_ind_Latn__zho_Hans.jsonl",
+    "datasets/processed/flores_dev_zho_Hans__vie_Latn.jsonl",
+    "datasets/processed/flores_dev_vie_Latn__zho_Hans.jsonl",
+    "datasets/processed/flores_dev_zho_Hans__tha_Thai.jsonl",
+    "datasets/processed/flores_dev_tha_Thai__zho_Hans.jsonl",
+    "datasets/processed/flores_dev_zho_Hans__tgl_Latn.jsonl",
+    "datasets/processed/flores_dev_tgl_Latn__zho_Hans.jsonl",
+    "datasets/processed/ntrex_dev_eng_Latn__spa_Latn.jsonl",
+    "datasets/processed/ntrex_dev_eng_Latn__ind_Latn.jsonl",
+    "datasets/processed/ntrex_dev_eng_Latn__vie_Latn.jsonl",
+    "datasets/processed/ntrex_dev_eng_Latn__tha_Thai.jsonl",
+    "datasets/processed/ntrex_dev_eng_Latn__tgl_Latn.jsonl"
+  ],
+  "limit_applied": null,
+  "per_pair_limit": 100,
+  "seed": null
+}

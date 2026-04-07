@@ -1,16 +1,25 @@
 # 低资源多语评估与数据准备（ModelScope + vLLM）
 
-## 虚拟环境（必须）
+## Conda 环境（必须）
+
+本项目分为两个环境，避免 `vllm` 与 `unbabel-comet` 的 `protobuf` 依赖冲突：
+
+- **评测/数据处理环境**：`lowres`（BLEU + COMET + 数据准备）
+- **部署环境**：`lowres-serve`（仅 vLLM 服务）
 
 在仓库根目录执行：
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+# 评测/数据
+conda create -n lowres python=3.12 -y
+conda activate lowres
 pip install -r requirements.txt
-```
 
-后续所有 Python 脚本与文档中的命令均假设 **已激活 `.venv`**，或使用 `.venv/bin/python` 显式调用。
+# vLLM 服务（单独环境）
+conda create -n lowres-serve python=3.12 -y
+conda activate lowres-serve
+pip install -r requirements-serve.txt
+```
 
 可选：统一缓存目录
 
@@ -24,10 +33,10 @@ export MODELSCOPE_CACHE="$PWD/datasets/cache/modelscope"
 2. **ModelScope 连通性与小样本加载**：`python scripts/check_modelscope_download.py`
 3. **准备数据**（FLORES + NTREX，生成 `datasets/processed/*.jsonl` 与各文件前 50 条预览）：`python scripts/prepare_datasets.py`
 4. **展开评估清单**：`python scripts/expand_language_pairs.py` → `datasets/eval_manifest.json` 与 `datasets/processed/eval_items_all.jsonl`
-5. **启动 vLLM**（另开终端，与评估分离）：见 `scripts/serve/serve_vllm_*.sh`（需自行 `pip install vllm`）
+5. **启动 vLLM**（另开终端，与评估分离）：见 `scripts/serve/serve_vllm_*.sh`（使用 `lowres-serve`）
 6. **评估**：编辑并运行 `scripts/run_eval_baseline.sh` 或 `scripts/run_eval_after_ccmatrix.sh`
 
-Shell 封装脚本会通过 `scripts/activate_venv.sh` **要求**存在 `.venv`，否则退出。
+Shell 封装脚本默认使用 `conda` 激活环境：评测脚本用 `lowres`，vLLM serve 脚本建议在 `lowres-serve` 下运行。
 
 ## 配置说明
 

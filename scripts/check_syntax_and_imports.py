@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""编译检查 scripts/*.py 并尝试导入关键依赖（需在已激活的 venv 中运行，或使用 .venv/bin/python）。"""
+"""编译检查 scripts/*.py 并尝试导入关键依赖（需在 conda env lowres 中运行）。"""
 from __future__ import annotations
 
 import compileall
@@ -32,7 +32,10 @@ def main() -> int:
             failed.append(f"{m}: {e}")
 
     if failed:
-        print("以下依赖导入失败（请确认已: source .venv/bin/activate && pip install -r requirements.txt）:", file=sys.stderr)
+        print(
+            "以下依赖导入失败（请确认已: conda activate lowres && pip install -r requirements.txt）:",
+            file=sys.stderr,
+        )
         for line in failed:
             print(f"  {line}", file=sys.stderr)
         return 1

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 小样本验证 ModelScope 数据集可加载、模型仓库可解析（尽量只拉取少量文件）。
-需在 venv 中运行: .venv/bin/python scripts/check_modelscope_download.py
+需在 conda lowres 中运行: conda activate lowres && python scripts/check_modelscope_download.py
 """
 from __future__ import annotations
 

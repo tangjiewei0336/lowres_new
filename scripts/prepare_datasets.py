@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 从 ModelScope 下载并规范化 FLORES + NTREX 到 datasets/processed/，并生成各文件前 50 条预览。
-依赖已激活 venv。环境变量 MODELSCOPE_CACHE 可选。
+依赖 conda 环境 lowres。环境变量 MODELSCOPE_CACHE 可选。
 """
 from __future__ import annotations
 
 import json
 import os
-from itertools import combinations
+from itertools import product
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -73,14 +73,21 @@ def load_flores_lang_table(dataset_id: str, lang: str, split: str) -> dict[str, 
 
 
 def expand_pairs(groups: list[list[str]], bidirectional: bool) -> list[tuple[str, str]]:
+    """
+    配对规则：从任意两组中各取一个语言，做笛卡尔积（不是组内两两组合）。
+    例如 groups=[[A,B],[C,D]] -> A<->C, A<->D, B<->C, B<->D（若 bidirectional=True 则双向）。
+    """
     pairs: list[tuple[str, str]] = []
-    for group in groups:
-        if len(group) < 2:
-            continue
-        for a, b in combinations(group, 2):
-            pairs.append((a, b))
-            if bidirectional:
-                pairs.append((b, a))
+    for i in range(len(groups)):
+        for j in range(i + 1, len(groups)):
+            g1 = groups[i]
+            g2 = groups[j]
+            if not g1 or not g2:
+                continue
+            for a, b in product(g1, g2):
+                pairs.append((a, b))
+                if bidirectional:
+                    pairs.append((b, a))
     return pairs
 
 
@@ -220,7 +227,7 @@ def main() -> int:
     ensure_dir(previews)
 
     pairs = expand_pairs(groups, bidir)
-    langs = sorted({x for p in pairs for x in p})
+    langs = sorted({x for group in groups for x in group})
 
     print("加载 FLORES 各语言表:", langs)
     flores_tables: dict[str, dict[str, str]] = {}
@@ -236,7 +243,8 @@ def main() -> int:
         write_preview(path, previews / f"{name}.preview_{PREVIEW_N}.jsonl")
         print(f"FLORES 写出 {path.name} ({len(rows)} 条)")
 
-    # NTREX：仅英语 -> 其它（在配置中出现的 tgt，且映射存在）
+    # NTREX：英语中心。对 evaluation_config 中出现的所有语言 L（L≠英语）生成 eng_Latn→L，
+    # 不必属于同一「语言组」内的两两组合（第二组只有非英语言时仍要评 en→spa 等）。
     print("探测 NTREX 数据结构...")
     probe = discover_ntrex_eng_tgt(ntrex_id)
     if not probe:
@@ -248,11 +256,16 @@ def main() -> int:
     else:
         print(f"NTREX 探测到样例 {len(probe)} 条（结构可用）")
 
-    # 英语中心：仅 (eng_Latn -> tgt)
+    # NTREX：仅保留 english-centered 且在“跨组配对”中实际出现的方向 eng_Latn -> tgt
     eng = "eng_Latn"
-    ntrex_pairs = [(s, t) for s, t in pairs if s == eng]
+    ntrex_targets: list[str] = []
+    if eng in langs:
+        for src, tgt in pairs:
+            if src == eng and tgt != eng and tgt not in ntrex_targets:
+                ntrex_targets.append(tgt)
 
-    for src, tgt in ntrex_pairs:
+    for tgt in ntrex_targets:
+        src = eng
         tk = mapping.get(tgt)
         if not tk:
             print(f"NTREX 跳过（无映射）: {src}->{tgt}")

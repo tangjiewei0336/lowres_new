@@ -1,10 +1,11 @@
 {
-  "_comment": "FLORES-200 语言代码 -> NTREX 中常用文件名/语言后缀（英语中心评测时 tgt 用此键探测资源；缺失则跳过 NTREX 该对）",
-  "eng_Latn": "eng",
+  "_comment": "FLORES-200 码 -> NTREX test 行字典中的目标语列名（英语中心：源句取 eng_Latn；无列则 prepare 阶段跳过该语言对）。Tagalog 在 NTREX 中为 fil_Latn。",
+  "eng_Latn": "eng_Latn",
   "zho_Hans": "zho_Hans",
-  "spa_Latn": "spa",
-  "ind_Latn": "ind",
-  "vie_Latn": "vie",
-  "tha_Thai": "tha",
-  "tgl_Latn": "tgl"
+  "spa_Latn": "spa_Latn",
+  "ind_Latn": "ind_Latn",
+  "vie_Latn": "vie_Latn",
+  "tha_Thai": "tha_Thai",
+  "tgl_Latn": "fil_Latn",
+  "jpn_Jpan": "jpn_Jpan"
 }

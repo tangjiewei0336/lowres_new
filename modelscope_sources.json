@@ -10,7 +10,7 @@
     },
     "ccmatrix": {
       "dataset_id": "AI-ModelScope/ccmatrix",
-      "note": "训练用占位 ID：请在 ModelScope 搜索确认后修改"
+      "note": "ModelScope 上可能不存在该 ID。prepare_ccmatrix_for_llamafactory.py 支持 backend=auto，ModelScope 失败会自动改用 HuggingFace yhavinga/ccmatrix。"
     },
     "nllb": {
       "dataset_id": "modelscope/nllb",
