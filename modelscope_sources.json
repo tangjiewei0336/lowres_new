@@ -1,0 +1,25 @@
+{
+  "datasets": {
+    "flores": {
+      "dataset_id": "facebook/flores",
+      "note": "若不可用可改为 opencompass/flores，并相应调整 prepare_datasets 中的加载逻辑"
+    },
+    "ntrex": {
+      "dataset_id": "MTEB/NTREX",
+      "note": "以 ModelScope 数据集页为准；列名/文件结构变化时请改 prepare_datasets.py"
+    },
+    "ccmatrix": {
+      "dataset_id": "AI-ModelScope/ccmatrix",
+      "note": "训练用占位 ID：请在 ModelScope 搜索确认后修改"
+    },
+    "nllb": {
+      "dataset_id": "modelscope/nllb",
+      "note": "训练用占位 ID：请在 ModelScope 搜索确认后修改"
+    }
+  },
+  "models": {
+    "smollm3_3b": "HuggingFaceTB/SmolLM3-3B",
+    "hunyuan_mt1_5_1_8b": "Tencent-Hunyuan/HY-MT1.5-1.8B",
+    "qwen3_4b": "Qwen/Qwen3-4B"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "_comment": "FLORES-200 语言代码 -> NTREX 中常用文件名/语言后缀（英语中心评测时 tgt 用此键探测资源；缺失则跳过 NTREX 该对）",
+  "eng_Latn": "eng",
+  "zho_Hans": "zho_Hans",
+  "spa_Latn": "spa",
+  "ind_Latn": "ind",
+  "vie_Latn": "vie",
+  "tha_Thai": "tha",
+  "tgl_Latn": "tgl"
+}

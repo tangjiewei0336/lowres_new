@@ -1,0 +1,15 @@
+{
+  "split": "dev",
+  "language_pair_groups": [
+    ["eng_Latn", "zho_Hans"],
+    ["spa_Latn", "ind_Latn", "vie_Latn", "tha_Thai", "tgl_Latn"]
+  ],
+  "bidirectional": true,
+  "limit": null,
+  "seed": null,
+  "replicates": 1,
+  "metrics": ["bleu", "comet"],
+  "output_dir": "eval_multilingual",
+  "max_tokens": 512,
+  "max_workers": 16
+}

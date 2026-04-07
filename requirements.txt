@@ -1,0 +1,11 @@
+# 在仓库根目录: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+# vLLM 推理请仍在同一 .venv 中按需安装: pip install vllm
+modelscope>=1.14.0
+openai>=1.40.0
+sacrebleu>=2.4.0
+unbabel-comet>=2.2.0
+torch>=2.1.0
+tqdm>=4.66.0
+pyyaml>=6.0.0
+datasets
+addict

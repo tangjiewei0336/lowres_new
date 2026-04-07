@@ -1,0 +1,45 @@
+# 占位：复制到 LLaMA Factory 安装目录后按实际路径修改。
+# 数据须来自 ModelScope；训练前将 train_file 换成本地 json/jsonl。
+#
+# 示例命令（在 LLaMA Factory 根目录、已激活 venv）:
+#   llamafactory-cli train training/llamafactory_ccmatrix_sft.placeholder.yaml
+
+### model
+model_name_or_path: Qwen/Qwen3-4B  # 改为 ModelScope 下载后的本地路径
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset: ccmatrix_mt_placeholder  # 在 data/dataset_info.json 注册同名数据集
+template: qwen  # 按实际基座改为 llama3 / smollm 等
+cutoff_len: 512
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: ../../models/Qwen3-4B_PLACEHOLDER_TIMESTAMP
+logging_steps: 20
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_train_epochs: 1
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### eval（可选）
+# val_size: 0.01
+# eval_strategy: steps
+# eval_steps: 500
