@@ -222,6 +222,109 @@ def plot_heatmap(
     plt.close(fig)
 
 
+def _fmt_delta(v: float, decimals: int) -> str:
+    sign = "+" if v > 0 else ""
+    return f"{sign}{v:.{decimals}f}"
+
+
+def plot_delta_heatmap(
+    mat_bleu_a: list[list[float | None]],
+    mat_bleu_b: list[list[float | None]],
+    mat_comet_a: list[list[float | None]] | None,
+    mat_comet_b: list[list[float | None]] | None,
+    langs: list[str],
+    title: str,
+    out_path: Path,
+) -> None:
+    """
+    绘制 runA 相对 runB 的变化：Δ = A - B。
+    - 底色：按 ΔBLEU，增加为黄色，减少为绿色
+    - 文本：同一格内写 ΔBLEU 与 ΔCOMET（若缺失则跳过）
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+
+    n = len(langs)
+    d_bleu = np.full((n, n), np.nan, dtype=float)
+    d_comet = np.full((n, n), np.nan, dtype=float)
+
+    for i in range(n):
+        for j in range(n):
+            a = mat_bleu_a[i][j]
+            b = mat_bleu_b[i][j]
+            if a is not None and b is not None and not (math.isnan(float(a)) or math.isnan(float(b))):
+                d_bleu[i, j] = float(a) - float(b)
+            if mat_comet_a is not None and mat_comet_b is not None:
+                ca = mat_comet_a[i][j]
+                cb = mat_comet_b[i][j]
+                if ca is not None and cb is not None and not (math.isnan(float(ca)) or math.isnan(float(cb))):
+                    d_comet[i, j] = float(ca) - float(cb)
+
+    # 颜色范围：以 ΔBLEU 的最大绝对值为对称范围
+    finite = d_bleu[np.isfinite(d_bleu)]
+    vmax = float(np.max(np.abs(finite))) if finite.size else 1.0
+    if vmax == 0.0:
+        vmax = 1.0
+    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+
+    # 绿（负）-> 白（0）-> 红（正）
+    cmap = LinearSegmentedColormap.from_list(
+        "green_white_red",
+        ["#2ca02c", "#ffffff", "#d62728"],
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig_w = max(8.0, 0.85 * len(langs))
+    fig_h = max(6.0, 0.85 * len(langs))
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=240)
+
+    im = ax.imshow(d_bleu, norm=norm, cmap=cmap, aspect="auto")
+    ax.set_title(title)
+    ax.set_xticks(range(len(langs)))
+    ax.set_yticks(range(len(langs)))
+    ax.set_xticklabels(langs, rotation=45, ha="right")
+    ax.set_yticklabels(langs)
+    ax.set_xlabel("tgt_lang")
+    ax.set_ylabel("src_lang")
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("ΔBLEU (runA - runB)")
+
+    for i in range(n):
+        for j in range(n):
+            vdb = d_bleu[i, j]
+            vdc = d_comet[i, j]
+            if not np.isfinite(vdb) and not np.isfinite(vdc):
+                continue
+
+            lines: list[str] = []
+            if np.isfinite(vdb):
+                lines.append(f"ΔB {_fmt_delta(float(vdb), 2)}")
+            if np.isfinite(vdc):
+                lines.append(f"ΔC {_fmt_delta(float(vdc), 3)}")
+            if not lines:
+                continue
+
+            rgba = cmap(float(norm(float(vdb))) if np.isfinite(vdb) else 0.0)
+            lum = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
+            txt_color = "black" if lum > 0.6 else "white"
+
+            ax.text(
+                j,
+                i,
+                "\n".join(lines),
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=txt_color,
+            )
+
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="按数据集绘制 BLEU 语言对热力图（统一标尺）")
     ap.add_argument(
@@ -240,6 +343,32 @@ def main() -> int:
 
     langs = load_eval_langs()
     corpora = [x.strip() for x in args.corpora.split(",") if x.strip()]
+
+    # 双 run 对比模式：画 Δ热力图（runA - runB）
+    if len(args.run_dirs) == 2:
+        run_a = args.run_dirs[0] if args.run_dirs[0].is_absolute() else (root() / args.run_dirs[0])
+        run_b = args.run_dirs[1] if args.run_dirs[1].is_absolute() else (root() / args.run_dirs[1])
+        rows_a = read_metrics_rows(run_a)
+        rows_b = read_metrics_rows(run_b)
+
+        out_base = run_a / "plots"
+        for corp in corpora:
+            a_bleu = build_matrix_metric(rows_a, corp, langs, metric="bleu")
+            b_bleu = build_matrix_metric(rows_b, corp, langs, metric="bleu")
+            a_comet = build_matrix_metric(rows_a, corp, langs, metric="comet")
+            b_comet = build_matrix_metric(rows_b, corp, langs, metric="comet")
+            out_path = out_base / f"heatmap_delta_bleu_comet_{corp}__{run_a.name}__vs__{run_b.name}.png"
+            plot_delta_heatmap(
+                mat_bleu_a=a_bleu,
+                mat_bleu_b=b_bleu,
+                mat_comet_a=a_comet,
+                mat_comet_b=b_comet,
+                langs=langs,
+                title=f"{run_a.name} vs {run_b.name} | {corp} | Δ = A - B",
+                out_path=out_path,
+            )
+            print(f"写出: {out_path}")
+        return 0
 
     # 读取所有 run 的矩阵，用于计算全局色标
     mats_for_scale: list[list[list[float | None]]] = []
