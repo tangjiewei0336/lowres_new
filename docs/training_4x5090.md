@@ -15,6 +15,10 @@ pip install -r requirements.txt
 
 ## 数据格式（ccMatrix / NLLB）
 
+格式化nllb
+
+python scripts/prepare_nllb_for_llamafactory.py --export-from-config --pairs-config training/ccmatrix_pair_limits.json
+
 - LLaMA Factory 支持 Alpaca / ShareGPT 等格式，需在 `data/dataset_info.json` 中注册。
 - **推荐 Alpaca 翻译样本**：
   - `instruction`: 固定如「请将以下 {src} 文本翻译为 {tgt}，只输出译文。」
