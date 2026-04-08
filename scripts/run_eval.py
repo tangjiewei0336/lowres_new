@@ -2,6 +2,13 @@
 """
 通过 vLLM 的 OpenAI 兼容 HTTP 接口批量翻译并计算 BLEU（sacrebleu）与 COMET。
 在 conda env lowres 中运行。Qwen3 通过 extra_body 关闭 enable_thinking（非思考/推理模式）；其它基座无此字段。
+
+BLEU 分词（默认 --bleu-tokenize=auto）：
+- 目标语为泰语（tha_*）：PyThaiNLP word_tokenize（默认 newmm）词级切分，再对 sacrebleu 使用 tokenize=none（避免 char-level BLEU 偏高、与业界评测习惯一致）。
+- FLORES 且非泰语目标：spBLEU，sacrebleu flores200。
+- 其它语料（如 NTREX）：中文 zh、日语 ja-mecab（缺依赖时退回 char），泰语同上 PyThai，其余 13a。
+- --bleu-tokenize=flores200：全语向强制 flores200（与部分论文单栏 spBLEU 完全一致，含泰语 SPM）。
+- legacy：仅中文 zh，其它 13a（旧行为）。
 """
 from __future__ import annotations
 
@@ -44,6 +51,117 @@ def mt_user_content(src_lang: str, tgt_lang: str, text: str) -> str:
     return (
         f"Translate from {src_lang} to {tgt_lang}. Output only the translation, no explanations.\n\n{text}"
     )
+
+
+def _tgt_lang_from_eval_pair(eval_pair: str) -> str:
+    if "->" not in eval_pair:
+        return ""
+    return eval_pair.split("->", 1)[1].strip()
+
+
+# 泰语 BLEU：sacrebleu 无内置 PyThai 分词器；先词级切分再 tokenize=none（与 PyThaiNLP 评测实践一致）
+_THAI_SACREbleu_TOK = "pythai_newmm"
+
+
+def _segment_thai_pythai_words(texts: list[str], *, engine: str = "newmm") -> list[str]:
+    try:
+        from pythainlp.tokenize import word_tokenize
+    except ImportError as e:
+        raise RuntimeError(
+            "泰语 BLEU 需要 PyThaiNLP：pip install pythainlp"
+        ) from e
+    out: list[str] = []
+    for s in texts:
+        # keep_whitespace=False：避免参考里已有空格时被拆成空 token，导致词边界与假设不一致
+        toks = word_tokenize((s or "").strip(), engine=engine, keep_whitespace=False)
+        out.append(" ".join(toks))
+    return out
+
+
+def sacrebleu_tokenize_heuristic_tgt(eval_pair: str) -> str:
+    """非 FLORES 语料等：中日泰不用纯 13a（泰语在 auto 主分支已优先处理）。"""
+    tgt = _tgt_lang_from_eval_pair(eval_pair)
+    if tgt.startswith("zho_") or tgt.startswith("cmn_"):
+        return "zh"
+    if tgt.startswith("jpn_"):
+        return "ja-mecab"
+    return "13a"
+
+
+def sacrebleu_tokenize_for_group(eval_corpus: str, eval_pair: str, policy: str) -> str:
+    """policy: auto | flores200 | legacy"""
+    pol = (policy or "auto").strip().lower()
+    tgt = _tgt_lang_from_eval_pair(eval_pair)
+    if pol == "legacy":
+        if tgt.startswith("zho_") or tgt.startswith("cmn_"):
+            return "zh"
+        return "13a"
+    if pol == "flores200":
+        return "flores200"
+    # auto：泰语始终词级（PyThai），不用 char / 不单依赖 flores200 的 SPM
+    if tgt.startswith("tha_"):
+        return _THAI_SACREbleu_TOK
+    if (eval_corpus or "").lower() == "flores":
+        return "flores200"
+    return sacrebleu_tokenize_heuristic_tgt(eval_pair)
+
+
+def _corpus_bleu_score(hyps: list[str], refs: list[str], tokenize: str) -> float:
+    import sacrebleu
+
+    if tokenize == _THAI_SACREbleu_TOK:
+        hyps_t = _segment_thai_pythai_words(hyps)
+        refs_t = _segment_thai_pythai_words(refs)
+        return float(sacrebleu.corpus_bleu(hyps_t, [refs_t], tokenize="none").score)
+    return float(sacrebleu.corpus_bleu(hyps, [refs], tokenize=tokenize).score)
+
+
+def corpus_bleu_with_fallbacks(
+    hyps: list[str],
+    refs: list[str],
+    eval_corpus: str,
+    eval_pair: str,
+    policy: str,
+) -> tuple[float, str]:
+    """返回 (bleu, 实际使用的 sacrebleu tokenize 名，可能带 fallback 标记)。"""
+    tok = sacrebleu_tokenize_for_group(eval_corpus, eval_pair, policy)
+    try:
+        return _corpus_bleu_score(hyps, refs, tok), tok
+    except Exception as e:
+        if tok == "ja-mecab":
+            print(
+                f"BLEU: ja-mecab 不可用（可 pip install 'sacrebleu[ja]'），已改用 char: {e}",
+                file=sys.stderr,
+            )
+            return _corpus_bleu_score(hyps, refs, "char"), "char_ja_fallback"
+        if tok == "flores200":
+            print(
+                f"BLEU: flores200(spBLEU) 失败（需 sentencepiece 且能下载 SPM），改用目标语启发式: {e}",
+                file=sys.stderr,
+            )
+            tgt = _tgt_lang_from_eval_pair(eval_pair)
+            if tgt.startswith("tha_"):
+                tok2 = _THAI_SACREbleu_TOK
+            else:
+                tok2 = sacrebleu_tokenize_heuristic_tgt(eval_pair)
+            try:
+                return _corpus_bleu_score(hyps, refs, tok2), f"{tok2}_spbleu_fallback"
+            except Exception as e2:
+                if tok2 == "ja-mecab":
+                    print(f"BLEU: 启发式 ja-mecab 仍失败，再用 char: {e2}", file=sys.stderr)
+                    return _corpus_bleu_score(hyps, refs, "char"), "char_ja_fallback"
+                raise
+        if tok == _THAI_SACREbleu_TOK:
+            print(
+                f"BLEU: PyThaiNLP 泰语分词失败，退回 intl（仍非 char）: {e}",
+                file=sys.stderr,
+            )
+            try:
+                return _corpus_bleu_score(hyps, refs, "intl"), "intl_thai_fallback"
+            except Exception as e2:
+                print(f"BLEU: intl 仍失败，最后退回 13a: {e2}", file=sys.stderr)
+                return _corpus_bleu_score(hyps, refs, "13a"), "13a_thai_fallback"
+        raise
 
 
 def build_extra_body(model_family: str) -> dict[str, Any] | None:
@@ -141,6 +259,17 @@ def main() -> int:
             "默认 Unbabel/wmt22-comet-da（需要可访问 HuggingFace；若无法下载将自动跳过 COMET）。"
         ),
     )
+    parser.add_argument(
+        "--bleu-tokenize",
+        type=str,
+        choices=("auto", "flores200", "legacy"),
+        default=os.environ.get("BLEU_TOKENIZE", "auto"),
+        help=(
+            "sacrebleu 分词策略：auto=FLORES 用 flores200(spBLEU)，"
+            "其它语料按目标语(zh/ja-mecab/char/13a)；"
+            "flores200=全部句对强制 spBLEU；legacy=旧版仅中文 zh 其余 13a。"
+        ),
+    )
     args = parser.parse_args()
 
     eval_cfg = load_json(args.eval_config)
@@ -230,37 +359,45 @@ def main() -> int:
     for key, triples in grouped.items():
         hyps = [t[0] for t in triples]
         refs = [t[1] for t in triples]
-        bleu = sacrebleu.corpus_bleu(hyps, [refs])
         corp, pair = key.split("|", 1)
+        bleu_score, bleu_tok = corpus_bleu_with_fallbacks(
+            hyps, refs, corp, pair, str(args.bleu_tokenize)
+        )
         if corp not in metrics["by_corpus"]:
             metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
         row = {
             "corpus": corp,
             "pair": pair,
-            "bleu": float(bleu.score),
+            "bleu": bleu_score,
+            "bleu_tokenizer": bleu_tok,
             "num": len(hyps),
         }
         bleu_rows.append(row)
         corpus_to_rows[corp].append(row)
-        metrics["by_corpus"][corp]["by_pair"][pair] = {"bleu": row["bleu"], "num": row["num"]}
+        metrics["by_corpus"][corp]["by_pair"][pair] = {
+            "bleu": row["bleu"],
+            "bleu_tokenizer": bleu_tok,
+            "num": row["num"],
+        }
 
-    # overall（全部样本）
-    overall_h = [r["hypothesis"] for r in results]
-    overall_r = [r["reference_text"] for r in results]
-    overall_bleu = sacrebleu.corpus_bleu(overall_h, [overall_r])
-    metrics["overall"]["bleu"] = float(overall_bleu.score)
+    # overall BLEU：语向混用不同分词器，不宜对整表跑一次 corpus_bleu；按各语言对样本数加权平均
+    total_n = sum(r["num"] for r in bleu_rows)
+    metrics["overall"]["bleu"] = (
+        float(sum(r["bleu"] * r["num"] for r in bleu_rows) / total_n) if total_n else 0.0
+    )
 
-    # overall（按 corpus）
     corpus_group: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in results:
         corpus_group[str(r.get("eval_corpus", "?"))].append(r)
-    for corp, rr in corpus_group.items():
-        hyps = [x["hypothesis"] for x in rr]
-        refs = [x["reference_text"] for x in rr]
-        b = sacrebleu.corpus_bleu(hyps, [refs])
+    for corp, rows_c in corpus_to_rows.items():
+        n_c = sum(r["num"] for r in rows_c)
+        bleu_c = float(sum(r["bleu"] * r["num"] for r in rows_c) / n_c) if n_c else 0.0
         if corp not in metrics["by_corpus"]:
             metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
-        metrics["by_corpus"][corp]["overall"]["bleu"] = float(b.score)
+        metrics["by_corpus"][corp]["overall"]["bleu"] = bleu_c
+    for corp, rr in corpus_group.items():
+        if corp not in metrics["by_corpus"]:
+            metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
         metrics["by_corpus"][corp]["overall"]["num"] = len(rr)
 
     # COMET：只跑一次全量预测，再按 (corpus, pair) 聚合均值；无 GPU 时 gpus=0
@@ -346,13 +483,18 @@ def main() -> int:
                         metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
                     metrics["by_corpus"][corp]["overall"]["comet"] = float(total / max(1, cnts_corpus[corp]))
 
+    metrics["bleu_tokenize_policy"] = str(args.bleu_tokenize)
+
     metrics_path = run_dir / "metrics.json"
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, ensure_ascii=False, indent=2)
 
     csv_path = run_dir / "metrics.csv"
     with open(csv_path, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["corpus", "pair", "bleu", "comet", "num"])
+        w = csv.DictWriter(
+            f,
+            fieldnames=["corpus", "pair", "bleu", "bleu_tokenizer", "comet", "num"],
+        )
         w.writeheader()
         for row in bleu_rows:
             key = f"{row['corpus']}|{row['pair']}"
@@ -367,7 +509,10 @@ def main() -> int:
     for corp, rows in corpus_to_rows.items():
         p = run_dir / f"metrics_{corp}.csv"
         with open(p, "w", encoding="utf-8", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=["pair", "bleu", "comet", "num"])
+            w = csv.DictWriter(
+                f,
+                fieldnames=["pair", "bleu", "bleu_tokenizer", "comet", "num"],
+            )
             w.writeheader()
             for row in sorted(rows, key=lambda x: x["pair"]):
                 key = f"{corp}|{row['pair']}"
@@ -375,6 +520,7 @@ def main() -> int:
                     {
                         "pair": row["pair"],
                         "bleu": row["bleu"],
+                        "bleu_tokenizer": row["bleu_tokenizer"],
                         "comet": comet_scores_by_key.get(key, ""),
                         "num": row["num"],
                     }

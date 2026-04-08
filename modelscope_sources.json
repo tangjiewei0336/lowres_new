@@ -20,6 +20,7 @@
   "models": {
     "smollm3_3b": "HuggingFaceTB/SmolLM3-3B",
     "hunyuan_mt1_5_1_8b": "Tencent-Hunyuan/HY-MT1.5-1.8B",
-    "qwen3_4b": "Qwen/Qwen3-4B"
+    "qwen3_4b": "Qwen/Qwen3-4B",
+    "qwen3_4b_instruct_2507": "Qwen/Qwen3-4B-Instruct-2507"
   }
 }

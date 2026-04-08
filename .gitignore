@@ -11,3 +11,4 @@ models/
 eval_multilingual/
 *.log
 training/data
+**/nohup.out

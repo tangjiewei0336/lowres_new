@@ -23,6 +23,11 @@ export SERVED_MODEL_NAME=qwen3-4b
 export EVAL_MODEL_TAG=baseline_qwen3_4b
 export EVAL_MODEL_FAMILY=qwen3
 
+# --- Qwen3-4B-Instruct-2507（先 download_models_to_models_dir.py --only qwen3_4b_instruct_2507，再 serve_vllm_qwen3_instruct_2507.sh）---
+# export SERVED_MODEL_NAME=qwen3-4b-instruct-2507
+# export EVAL_MODEL_TAG=baseline_qwen3_4b_instruct_2507
+# export EVAL_MODEL_FAMILY=qwen3
+
 # --- Hunyuan HY-MT1.5-1.8B ---
 # export SERVED_MODEL_NAME=hunyuan-mt-1.8b
 # export EVAL_MODEL_TAG=baseline_hunyuan_mt18b

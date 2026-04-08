@@ -3,6 +3,8 @@
 modelscope>=1.14.0
 openai>=1.40.0
 sacrebleu>=2.4.0
+sentencepiece>=0.2.0
+pythainlp>=5.0.0
 unbabel-comet>=2.2.0
 torch==2.10.0
 tqdm>=4.66.0
