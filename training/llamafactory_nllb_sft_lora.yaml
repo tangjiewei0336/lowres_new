@@ -1,0 +1,51 @@
+# Qwen3-4B + NLLB/ccMatrix 句对 SFT（LoRA）
+# 数据为 scripts/prepare_nllb_for_llamafactory.py 导出的 Alpaca jsonl，
+# 合并建议使用：python scripts/merge_nllb_llamafactory_jsonl.py → nllb_mt_all.jsonl
+#
+# 运行（conda env lowres）：
+#   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_sft_lora.yaml
+#
+# 前置：
+# - 基座模型路径与下方 model_name_or_path 一致（可按本机实际修改）
+# - dataset_info.json 与 jsonl 均在 dataset_dir 下（本仓库为 training/data）
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset_dir: /root/lowres_new/training/data
+dataset: nllb_mt
+template: qwen
+cutoff_len: 512
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-4B_20260407_033755_nllb_sft_lora
+logging_steps: 20
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 16
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_train_epochs: 2
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### eval（可选）
+val_size: 0.01
+eval_strategy: steps
+eval_steps: 500

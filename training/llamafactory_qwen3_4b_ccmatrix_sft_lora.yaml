@@ -18,6 +18,7 @@ lora_rank: 8
 lora_target: all
 
 ### dataset
+dataset_dir: /root/lowres_new/training/data
 dataset: ccmatrix_mt
 template: qwen
 cutoff_len: 512

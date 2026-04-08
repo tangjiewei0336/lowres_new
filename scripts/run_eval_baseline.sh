@@ -14,14 +14,14 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-EMPTY}"
 
 # 选择要评的基座（取消注释其中一组）:
 # --- SmolLM3-3B ---
-export SERVED_MODEL_NAME=smollm3-3b
-export EVAL_MODEL_TAG=baseline_smollm3_3b
-export EVAL_MODEL_FAMILY=generic
+# export SERVED_MODEL_NAME=smollm3-3b
+# export EVAL_MODEL_TAG=baseline_smollm3_3b
+# export EVAL_MODEL_FAMILY=generic
 
 # --- Qwen3-4B（关闭思考模式由 run_eval.py 处理）---
-# export SERVED_MODEL_NAME=qwen3-4b
-# export EVAL_MODEL_TAG=baseline_qwen3_4b
-# export EVAL_MODEL_FAMILY=qwen3
+export SERVED_MODEL_NAME=qwen3-4b
+export EVAL_MODEL_TAG=baseline_qwen3_4b
+export EVAL_MODEL_FAMILY=qwen3
 
 # --- Hunyuan HY-MT1.5-1.8B ---
 # export SERVED_MODEL_NAME=hunyuan-mt-1.8b

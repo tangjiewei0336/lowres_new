@@ -10,3 +10,4 @@ datasets/previews/
 models/
 eval_multilingual/
 *.log
+training/data
