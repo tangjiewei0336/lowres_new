@@ -34,6 +34,8 @@ def expand_pairs(groups: list[list[str]], bidirectional: bool) -> list[tuple[str
             if not g1 or not g2:
                 continue
             for a, b in product(g1, g2):
+                if a == b:
+                    continue
                 pairs.append((a, b))
                 if bidirectional:
                     pairs.append((b, a))

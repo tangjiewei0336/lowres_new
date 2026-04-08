@@ -116,6 +116,16 @@ def _corpus_bleu_score(hyps: list[str], refs: list[str], tokenize: str) -> float
     return float(sacrebleu.corpus_bleu(hyps, [refs], tokenize=tokenize).score)
 
 
+def _segment_with_sacrebleu_tokenizer(texts: list[str], tokenize: str) -> list[str]:
+    """将 sacrebleu 的 tokenize 结果（空格分隔）输出，便于人工排查。"""
+    import sacrebleu
+
+    # BLEU(tokenize=...) 的 tokenizer 会把输入转成以空格分隔的“token串”
+    metric = sacrebleu.BLEU(tokenize=tokenize, force=True)
+    tok_fn = metric.tokenizer
+    return [tok_fn((t or "").strip()) for t in texts]
+
+
 def corpus_bleu_with_fallbacks(
     hyps: list[str],
     refs: list[str],
@@ -270,6 +280,11 @@ def main() -> int:
             "flores200=全部句对强制 spBLEU；legacy=旧版仅中文 zh 其余 13a。"
         ),
     )
+    parser.add_argument(
+        "--dump-segmentation",
+        action="store_true",
+        help="在 hypotheses.jsonl 中额外写出分词后的 hypothesis/reference（主要用于泰语 PyThaiNLP）。",
+    )
     args = parser.parse_args()
 
     eval_cfg = load_json(args.eval_config)
@@ -309,10 +324,26 @@ def main() -> int:
             max_tokens,
             args.model_family,
         )
-        return {
-            **it,
-            "hypothesis": hyp,
-        }
+        out = {**it, "hypothesis": hyp}
+        if args.dump_segmentation:
+            corp = str(it.get("eval_corpus", "?"))
+            pair = str(it.get("eval_pair") or (sl + "->" + tl))
+            tok = sacrebleu_tokenize_for_group(corp, pair, str(args.bleu_tokenize))
+            if tok == _THAI_SACREbleu_TOK:
+                out["hypothesis_segmented"] = _segment_thai_pythai_words([hyp])[0]
+                out["reference_segmented"] = _segment_thai_pythai_words([ref])[0]
+                out["segmentation_tokenizer"] = tok
+            elif tok in ("zh", "flores200"):
+                # 中文：zh 分词；FLORES 默认 flores200（spBLEU）也常用于中文
+                try:
+                    out["hypothesis_segmented"] = _segment_with_sacrebleu_tokenizer([hyp], tok)[0]
+                    out["reference_segmented"] = _segment_with_sacrebleu_tokenizer([ref], tok)[0]
+                    out["segmentation_tokenizer"] = tok
+                except Exception as e:
+                    # dump 不影响主流程
+                    out["segmentation_tokenizer"] = f"{tok}_dump_failed"
+                    out["segmentation_error"] = str(e)
+        return out
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = [ex.submit(_one, it) for it in items]
