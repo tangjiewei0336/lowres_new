@@ -1,0 +1,52 @@
+# Qwen3-4B + NLLB 数据：全参数 SFT（非 LoRA）
+#
+# 与 llamafactory_nllb_sft_lora.yaml 相比：
+# - finetuning_type: full（更新全部权重）
+# - 显存远大于 LoRA：务必调小 batch、必要时用 DeepSpeed ZeRO / 多卡
+#
+# 运行：
+#   conda activate lowres
+#   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_sft_full.yaml
+#
+# 单机显存吃紧时：先减小 per_device_train_batch_size、增大 gradient_accumulation_steps，
+# 并考虑开启 DeepSpeed（LLaMA Factory 支持 ds 配置，见官方文档）。
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full
+
+### dataset
+dataset_dir: /root/lowres_new/training/data
+dataset: nllb_mt
+template: qwen
+cutoff_len: 512
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-4B_20260407_033755_nllb_sft_full
+logging_steps: 20
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+# 全参微调：以下数值偏保守，请按显卡显存上调/下调
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 32
+learning_rate: 1.0e-5
+num_train_epochs: 2
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### eval（可选）
+# val_size: 0.01
+# eval_strategy: steps
+# eval_steps: 500

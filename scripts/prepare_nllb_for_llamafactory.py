@@ -13,6 +13,8 @@
 输出：
   training/data/nllb_mt_<src>__<tgt>.jsonl
   training/data/previews/nllb_mt_<src>__<tgt>.preview_50.jsonl
+
+instruction 使用中文语言名（如「日语」「英语」）；若码表未收录则仍写 FLORES 码。
 """
 
 from __future__ import annotations
@@ -27,6 +29,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 PREVIEW_N = 50
+
+# 与 prepare_ccmatrix_for_llamafactory 共用码表（见 flores_lang_zh.py）
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
 
 _ALLENAI_URL = "https://storage.googleapis.com/allennlp-data-bucket/nllb/"
 _STATMT_URL = "http://data.statmt.org/cc-matrix/"
@@ -136,7 +144,9 @@ def stream_export_pair(
     out_path: Path,
     prev_path: Path,
 ) -> int:
-    instruction = f"请将以下 {user_src} 文本翻译为 {user_tgt}，只输出译文。"
+    src_zh = flores_code_to_zh_name(user_src)
+    tgt_zh = flores_code_to_zh_name(user_tgt)
+    instruction = f"请将以下 {src_zh} 文本翻译为 {tgt_zh}，只输出译文。"
     preview_lines: list[str] = []
     written = 0
 

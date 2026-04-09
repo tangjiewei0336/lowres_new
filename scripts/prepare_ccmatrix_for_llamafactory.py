@@ -18,6 +18,8 @@
 输出：
   training/data/ccmatrix_mt_<src>__<tgt>.jsonl
   training/data/previews/ccmatrix_mt_<src>__<tgt>.preview_50.jsonl
+
+instruction 使用中文语言名（与 prepare_nllb_for_llamafactory 一致，见 scripts/flores_lang_zh.py）。
 """
 
 from __future__ import annotations
@@ -25,10 +27,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Iterator
 
 PREVIEW_N = 50
+
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
 
 # FLORES-200 语言码 -> 常用 ISO639-1（用于 HuggingFace yhavinga/ccmatrix 配置名，如 en-zh）
 HF_LANG_MAP: dict[str, str] = {
@@ -122,7 +130,10 @@ def _export_one_pair(
 
     written = 0
     preview_lines: list[str] = []
-    instruction = f"请将以下 {src_lang} 文本翻译为 {tgt_lang}，只输出译文。"
+    instruction = (
+        f"请将以下 {flores_code_to_zh_name(src_lang)} 文本翻译为 "
+        f"{flores_code_to_zh_name(tgt_lang)}，只输出译文。"
+    )
 
     # 兼容 MsDataset 与 HF streaming
     row_iter = iter_ms_rows(ds) if hasattr(ds, "__len__") and hasattr(ds, "__getitem__") else iter_hf_rows(ds)

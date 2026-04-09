@@ -1,0 +1,29 @@
+# 将 LoRA 适配器合并进基座并导出为完整 HuggingFace 模型目录，供 vLLM 直接 serve。
+#
+# 用法（conda env lowres）：
+#   llamafactory-cli export /root/lowres_new/training/llamafactory_export_nllb_lora_merge.yaml
+#
+# 合并完成后：
+#   vllm serve /root/lowres_new/models/Qwen3-4B_nllb_merged --served-model-name qwen3-4b-nllb ...
+#
+# 请按需修改：基座路径、adapter 路径（checkpoint 目录）、export_dir。
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
+adapter_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755_nllb_sft_lora/checkpoint-400
+trust_remote_code: true
+
+### method（与训练时一致，便于正确加载 LoRA）
+stage: sft
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### template（Qwen3 SFT 训练用的模板）
+template: qwen
+
+### export
+export_dir: /root/lowres_new/models/Qwen3-4B_nllb_merged_400
+export_size: 5
+export_device: auto
+export_legacy_format: false

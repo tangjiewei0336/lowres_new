@@ -46,6 +46,11 @@ PREVIEW_N = 50
 ZHO = "zho_Hans"
 ENG = "eng_Latn"
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
+
 
 def root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -109,7 +114,10 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def make_instruction(src: str, tgt: str) -> str:
-    return f"请将以下 {src} 文本翻译为 {tgt}，只输出译文。"
+    return (
+        f"请将以下 {flores_code_to_zh_name(src)} 文本翻译为 "
+        f"{flores_code_to_zh_name(tgt)}，只输出译文。"
+    )
 
 
 def preview_path(out_path: Path) -> Path:
