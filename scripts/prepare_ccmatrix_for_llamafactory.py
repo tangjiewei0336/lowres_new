@@ -47,7 +47,6 @@ HF_LANG_MAP: dict[str, str] = {
     "vie_Latn": "vi",
     "tha_Thai": "th",
     "tgl_Latn": "tl",  # Tagalog
-    "jpn_Jpan": "ja",
 }
 
 

@@ -19,8 +19,13 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-EMPTY}"
 # export EVAL_MODEL_FAMILY=generic
 
 # --- Qwen3-4B（关闭思考模式由 run_eval.py 处理）---
-export SERVED_MODEL_NAME=qwen3-4b
-export EVAL_MODEL_TAG=baseline_qwen3_4b
+# export SERVED_MODEL_NAME=qwen3-4b
+# export EVAL_MODEL_TAG=baseline_qwen3_4b
+# export EVAL_MODEL_FAMILY=qwen3
+
+# --- Qwen3-8B（先 download_models_to_models_dir.py --only qwen3_8b，再 scripts/serve/run.sh qwen3-8b）---
+export SERVED_MODEL_NAME=qwen3-8b
+export EVAL_MODEL_TAG=baseline_qwen3_8b
 export EVAL_MODEL_FAMILY=qwen3
 
 # --- Qwen3-4B-Instruct-2507（先 download_models_to_models_dir.py --only qwen3_4b_instruct_2507，再 serve_vllm_qwen3_instruct_2507.sh）---

@@ -6,7 +6,7 @@
 BLEU 分词（默认 --bleu-tokenize=auto）：
 - 目标语为泰语（tha_*）：PyThaiNLP word_tokenize（默认 newmm）词级切分，再对 sacrebleu 使用 tokenize=none（避免 char-level BLEU 偏高、与业界评测习惯一致）。
 - FLORES 且非泰语目标：spBLEU，sacrebleu flores200。
-- 其它语料（如 NTREX）：中文 zh、日语 ja-mecab（缺依赖时退回 char），泰语同上 PyThai，其余 13a。
+- 其它语料（如 NTREX）：中文 zh，泰语同上 PyThai，西班牙语等其余语言 13a。
 - --bleu-tokenize=flores200：全语向强制 flores200（与部分论文单栏 spBLEU 完全一致，含泰语 SPM）。
 - legacy：仅中文 zh，其它 13a（旧行为）。
 """
@@ -79,12 +79,10 @@ def _segment_thai_pythai_words(texts: list[str], *, engine: str = "newmm") -> li
 
 
 def sacrebleu_tokenize_heuristic_tgt(eval_pair: str) -> str:
-    """非 FLORES 语料等：中日泰不用纯 13a（泰语在 auto 主分支已优先处理）。"""
+    """非 FLORES 语料等：中文不用纯 13a（泰语在 auto 主分支已优先处理）。"""
     tgt = _tgt_lang_from_eval_pair(eval_pair)
     if tgt.startswith("zho_") or tgt.startswith("cmn_"):
         return "zh"
-    if tgt.startswith("jpn_"):
-        return "ja-mecab"
     return "13a"
 
 
@@ -276,7 +274,7 @@ def main() -> int:
         default=os.environ.get("BLEU_TOKENIZE", "auto"),
         help=(
             "sacrebleu 分词策略：auto=FLORES 用 flores200(spBLEU)，"
-            "其它语料按目标语(zh/ja-mecab/char/13a)；"
+            "其它语料按目标语(zh/char/13a 等)；"
             "flores200=全部句对强制 spBLEU；legacy=旧版仅中文 zh 其余 13a。"
         ),
     )

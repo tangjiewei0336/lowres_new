@@ -1,0 +1,48 @@
+# Qwen3-4B：NLLB 篇章级 draft→refine（LoRA）
+# 数据由 scripts/build_nllb_draft_refine_jsonl.py 生成，合并见 scripts/merge_nllb_draft_refine_jsonl.py
+#
+# 运行（conda env lowres）：
+#   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_draft_refine_lora.yaml
+#
+# 典型两阶段：先句级 dataset=nllb_mt，再本配置；若需同时调比重见 llamafactory_nllb_mt_refine_mix_lora.yaml
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset_dir: /root/lowres_new/training/data
+dataset: nllb_draft_refine
+template: qwen
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-4B_20260407_033755_nllb_draft_refine_lora
+logging_steps: 20
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_train_epochs: 1
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### eval（可选）
+val_size: 0.01
+eval_strategy: steps
+eval_steps: 500

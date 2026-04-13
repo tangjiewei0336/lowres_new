@@ -1,0 +1,57 @@
+# Qwen3-4B：句级 nllb_mt + 篇章 nllb_draft_refine 混合训练（LoRA）
+#
+# 比重：改下方 interleave_probs（与 dataset 顺序一致：先句级，后 refine）。
+#   mix_strategy:
+#     - interleave_under：某一数据集先耗尽即停（适合两集规模差很多）
+#     - interleave_over：较大集可多轮覆盖（适合希望小集多看几遍）
+#   概率不必严格和为 1，LLaMAFactory 会归一化；习惯上写成 0.7,0.3 即可。
+#
+# 运行（conda env lowres）：
+#   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_mt_refine_mix_lora.yaml
+#
+# 若不想在训练时混合、而是预先合成单一 jsonl，见：
+#   scripts/merge_alpaca_jsonl_weighted.py
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset_dir: /root/lowres_new/training/data
+dataset: nllb_mt,nllb_draft_refine
+mix_strategy: interleave_under
+interleave_probs: 0.7,0.3
+template: qwen
+# 取较大 cutoff 以覆盖篇章样本；句级句对多数较短，仅多占少量 padding
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-4B_20260407_033755_nllb_mt_refine_mix_lora
+logging_steps: 20
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_train_epochs: 1
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### eval（可选）
+val_size: 0.01
+eval_strategy: steps
+eval_steps: 500

@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-从 Hugging Face 数据集 allenai/nllb 所依据的镜像（AllenAI GCS + statmt cc-matrix）流式拉取句对，
-导出为与 prepare_ccmatrix_for_llamafactory.py 相同格式的 Alpaca jsonl。
+从 NLLB 镜像流式导出句对，格式为英文指令 + Input + Response 的整块文本（JSONL）。
 
-语言对列表与 URL 规则与仓库中 nllb.py / nllb_lang_pairs.py 一致（NLLB_PAIRS 优先，其余走 CCMATRIX_PAIRS）。
-当前环境的 datasets>=3 无法直接 load_dataset("allenai/nllb")，因此本脚本自行下载 .gz / .tsv.gz。
+每条样本一行 JSON：{"text": "Instruction: ...\\nInput: ...\\nResponse: ..."}
+
+与 scripts/prepare_nllb_for_llamafactory.py 使用相同的拉取逻辑与语言对解析；仅序列化格式不同。
 
 用法：
   conda activate lowres
-  python scripts/prepare_nllb_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
+  python scripts/prepare_nllb_instruction_input_response_jsonl.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
 
-输出（默认在 training/data/multilingual/nllb/，可用 --out-subdir 改）：
-  training/data/multilingual/nllb/nllb_mt_<src>__<tgt>.jsonl
-  training/data/multilingual/nllb/previews/nllb_mt_<src>__<tgt>.preview_50.jsonl
+输出（默认 training/data/multilingual/nllb_iir/）：
+  nllb_iir_<src>__<tgt>.jsonl
+  previews/nllb_iir_<src>__<tgt>.preview_50.jsonl
 
-篇章级 refine 数据见 scripts/build_nllb_draft_refine_jsonl.py。
-
-instruction 使用中文语言名（如「西班牙语」「英语」）；若码表未收录则仍写 FLORES 码。
+在 LLaMA-Factory 的 dataset_info.json 中可注册为单列 text（按你使用的版本配置 formatting / columns）。
 """
 
 from __future__ import annotations
@@ -32,14 +30,56 @@ from urllib.request import Request, urlopen
 
 PREVIEW_N = 50
 
-# 与 prepare_ccmatrix_for_llamafactory 共用码表（见 flores_lang_zh.py）
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
 
 _ALLENAI_URL = "https://storage.googleapis.com/allennlp-data-bucket/nllb/"
 _STATMT_URL = "http://data.statmt.org/cc-matrix/"
+
+# 与 flores_lang_zh.FLORES_LANG_ZH 键一致，用于英文 Instruction 行
+FLORES_LANG_EN: dict[str, str] = {
+    "eng_Latn": "English",
+    "zho_Hans": "Chinese (Simplified)",
+    "zho_Hant": "Chinese (Traditional)",
+    "spa_Latn": "Spanish",
+    "fra_Latn": "French",
+    "deu_Latn": "German",
+    "ita_Latn": "Italian",
+    "por_Latn": "Portuguese",
+    "rus_Cyrl": "Russian",
+    "ukr_Cyrl": "Ukrainian",
+    "pol_Latn": "Polish",
+    "nld_Latn": "Dutch",
+    "swe_Latn": "Swedish",
+    "dan_Latn": "Danish",
+    "nob_Latn": "Norwegian Bokmål",
+    "fin_Latn": "Finnish",
+    "ces_Latn": "Czech",
+    "ell_Grek": "Greek",
+    "heb_Hebr": "Hebrew",
+    "tur_Latn": "Turkish",
+    "arb_Arab": "Arabic",
+    "fas_Arab": "Persian",
+    "hin_Deva": "Hindi",
+    "ben_Beng": "Bengali",
+    "urd_Arab": "Urdu",
+    "ind_Latn": "Indonesian",
+    "vie_Latn": "Vietnamese",
+    "tha_Thai": "Thai",
+    "tgl_Latn": "Tagalog",
+    "kor_Hang": "Korean",
+    "zsm_Latn": "Malay",
+    "mya_Mymr": "Burmese",
+    "khm_Khmr": "Khmer",
+    "lao_Laoo": "Lao",
+    "cmn_Hans": "Mandarin Chinese (Simplified)",
+    "yue_Hant": "Cantonese",
+}
+
+
+def flores_code_to_en_name(code: str) -> str:
+    return FLORES_LANG_EN.get(code.strip(), code.strip())
 
 
 def root() -> Path:
@@ -75,10 +115,6 @@ def resolve_source(
     ccm: set[tuple[str, str]],
     mp: dict[str, str],
 ) -> tuple[str, str, str, str] | None:
-    """
-    返回 (url, canon_src, canon_tgt, kind)。
-    canon_* 表示文件中前两列文本对应的 FLORES 语言码（与 nllb 脚本一致）。
-    """
     if (src, tgt) in nllb:
         return f"{_ALLENAI_URL}{src}-{tgt}.gz", src, tgt, "allenai"
     if (src, tgt) in ccm:
@@ -135,6 +171,13 @@ def map_to_user_pair(
     return None
 
 
+def format_sample_block(src_t: str, tgt_t: str, user_src: str, user_tgt: str) -> str:
+    src_en = flores_code_to_en_name(user_src)
+    tgt_en = flores_code_to_en_name(user_tgt)
+    instruction = f"Translate {src_en} to {tgt_en}"
+    return f"Instruction: {instruction}\nInput: {src_t}\nResponse: {tgt_t}"
+
+
 def stream_export_pair(
     url: str,
     kind: str,
@@ -146,13 +189,10 @@ def stream_export_pair(
     out_path: Path,
     prev_path: Path,
 ) -> int:
-    src_zh = flores_code_to_zh_name(user_src)
-    tgt_zh = flores_code_to_zh_name(user_tgt)
-    instruction = f"请将以下 {src_zh} 文本翻译为 {tgt_zh}，只输出译文。"
     preview_lines: list[str] = []
     written = 0
 
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; lowres-nllb-export/1.0)"})
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; lowres-nllb-iir/1.0)"})
     try:
         resp = urlopen(req, timeout=300)
     except (HTTPError, URLError) as e:
@@ -181,7 +221,8 @@ def stream_export_pair(
             if not mapped:
                 continue
             src_t, tgt_t = mapped
-            rec = {"instruction": instruction, "input": src_t, "output": tgt_t}
+            block = format_sample_block(src_t, tgt_t, user_src, user_tgt)
+            rec = {"text": block}
             js = json.dumps(rec, ensure_ascii=False)
             fo.write(js + "\n")
             if written < PREVIEW_N:
@@ -199,7 +240,7 @@ def stream_export_pair(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="从 NLLB 镜像导出 LLaMAFactory Alpaca jsonl")
+    ap = argparse.ArgumentParser(description="从 NLLB 镜像导出 Instruction/Input/Response 文本块 jsonl")
     ap.add_argument(
         "--pairs-config",
         type=Path,
@@ -213,8 +254,8 @@ def main() -> int:
     ap.add_argument(
         "--out-subdir",
         type=str,
-        default="multilingual/nllb",
-        help="相对于 training/data 的子目录，句级 jsonl 输出位置",
+        default="multilingual/nllb_iir",
+        help="相对于 training/data 的子目录",
     )
     args = ap.parse_args()
 
@@ -235,8 +276,8 @@ def main() -> int:
             )
             return
         url, canon_src, canon_tgt, kind = resolved
-        out_path = out_dir / f"nllb_mt_{user_src}__{user_tgt}.jsonl"
-        prev_path = prev_dir / f"nllb_mt_{user_src}__{user_tgt}.preview_{PREVIEW_N}.jsonl"
+        out_path = out_dir / f"nllb_iir_{user_src}__{user_tgt}.jsonl"
+        prev_path = prev_dir / f"nllb_iir_{user_src}__{user_tgt}.preview_{PREVIEW_N}.jsonl"
         print(f"拉取 [{kind}] {user_src}->{user_tgt} canon=({canon_src},{canon_tgt})")
         n = stream_export_pair(
             url=url,

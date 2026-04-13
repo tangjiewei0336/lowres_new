@@ -3,16 +3,16 @@
 用模型把 NLLB 的「英语侧」翻译成中文（zho_Hans），生成新的中-多语言伪平行数据，双向都产出。
 
 输入（已存在于本仓库的导出格式，Alpaca jsonl）：
-  training/data/nllb_mt_eng_Latn__<tgt>.jsonl   # input=英语, output=<tgt>
-  training/data/nllb_mt_<tgt>__eng_Latn.jsonl   # input=<tgt>, output=英语
+  training/data/multilingual/nllb/nllb_mt_eng_Latn__<tgt>.jsonl   # input=英语, output=<tgt>
+  training/data/multilingual/nllb/nllb_mt_<tgt>__eng_Latn.jsonl   # input=<tgt>, output=英语
 
 做法：
   - 对 eng->tgt 文件：把 input(英语) 翻成中文，得到 zho_Hans->tgt
   - 对 tgt->eng 文件：把 output(英语) 翻成中文，得到 tgt->zho_Hans
 
 输出（新增文件，不覆盖原始 NLLB 文件）：
-  training/data/nllb_aug_zho_Hans__<tgt>.jsonl
-  training/data/nllb_aug_<tgt>__zho_Hans.jsonl
+  training/data/multilingual/nllb/nllb_aug_zho_Hans__<tgt>.jsonl
+  training/data/multilingual/nllb/nllb_aug_<tgt>__zho_Hans.jsonl
 并生成 previews/ 下的 preview_50.jsonl。
 
 翻译方式：
@@ -25,7 +25,7 @@
 用法示例：
   conda activate lowres
   # 先启动 vLLM 服务（served-model-name 与下方一致）
-  python scripts/augment_nllb_eng_to_zho_via_model.py --tgt-langs spa_Latn ind_Latn vie_Latn tha_Thai tgl_Latn jpn_Jpan
+  python scripts/augment_nllb_eng_to_zho_via_model.py --tgt-langs spa_Latn ind_Latn vie_Latn tha_Thai tgl_Latn
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def main() -> int:
     ap.add_argument(
         "--data-dir",
         type=Path,
-        default=root() / "training" / "data",
+        default=root() / "training" / "data" / "multilingual" / "nllb",
         help="包含 nllb_mt_*.jsonl 的目录",
     )
     ap.add_argument(

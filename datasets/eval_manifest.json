@@ -13,8 +13,7 @@
       "ind_Latn",
       "vie_Latn",
       "tha_Thai",
-      "tgl_Latn",
-      "jpn_Jpan"
+      "tgl_Latn"
     ]
   ],
   "items_jsonl": "datasets/processed/eval_items_all.jsonl",

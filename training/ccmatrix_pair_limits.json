@@ -13,8 +13,6 @@
     {"src_lang": "tha_Thai", "tgt_lang": "eng_Latn", "limit": 100000},
     {"src_lang": "eng_Latn", "tgt_lang": "tgl_Latn", "limit": 100000},
     {"src_lang": "tgl_Latn", "tgt_lang": "eng_Latn", "limit": 100000},
-    {"src_lang": "eng_Latn", "tgt_lang": "jpn_Jpan", "limit": 100000},
-    {"src_lang": "jpn_Jpan", "tgt_lang": "eng_Latn", "limit": 100000},
 
     {"src_lang": "zho_Hans", "tgt_lang": "spa_Latn", "limit": 100000},
     {"src_lang": "spa_Latn", "tgt_lang": "zho_Hans", "limit": 100000},
@@ -25,9 +23,7 @@
     {"src_lang": "zho_Hans", "tgt_lang": "tha_Thai", "limit": 100000},
     {"src_lang": "tha_Thai", "tgt_lang": "zho_Hans", "limit": 100000},
     {"src_lang": "zho_Hans", "tgt_lang": "tgl_Latn", "limit": 100000},
-    {"src_lang": "tgl_Latn", "tgt_lang": "zho_Hans", "limit": 100000},
-    {"src_lang": "zho_Hans", "tgt_lang": "jpn_Jpan", "limit": 100000},
-    {"src_lang": "jpn_Jpan", "tgt_lang": "zho_Hans", "limit": 100000}
+    {"src_lang": "tgl_Latn", "tgt_lang": "zho_Hans", "limit": 100000}
   ]
 }
 

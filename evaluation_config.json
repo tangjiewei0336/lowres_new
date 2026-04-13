@@ -2,7 +2,7 @@
   "split": "dev",
   "language_pair_groups": [
     ["eng_Latn", "zho_Hans"],
-    ["eng_Latn", "zho_Hans", "spa_Latn", "ind_Latn", "vie_Latn", "tha_Thai", "tgl_Latn", "jpn_Jpan"]
+    ["eng_Latn", "zho_Hans", "spa_Latn", "ind_Latn", "vie_Latn", "tha_Thai", "tgl_Latn"]
   ],
   "bidirectional": true,
   "limit": null,

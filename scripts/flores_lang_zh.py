@@ -31,7 +31,6 @@ FLORES_LANG_ZH: dict[str, str] = {
     "vie_Latn": "越南语",
     "tha_Thai": "泰语",
     "tgl_Latn": "他加禄语",
-    "jpn_Jpan": "日语",
     "kor_Hang": "韩语",
     "zsm_Latn": "马来语",
     "mya_Mymr": "缅甸语",
