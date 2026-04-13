@@ -18,7 +18,7 @@ _MS_TRUST_REMOTE = True
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def load_json(path: Path) -> dict:

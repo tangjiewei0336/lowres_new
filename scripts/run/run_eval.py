@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def load_json(p: Path) -> dict[str, Any]:

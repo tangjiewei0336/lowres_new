@@ -4,8 +4,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=activate_conda_lowres.sh
-source "${SCRIPT_DIR}/activate_conda_lowres.sh"
-ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT}"
 
 FINETUNED_DIR="${FINETUNED_DIR:?请设置 FINETUNED_DIR，例如 models/Qwen3-4B_20250407_153012/merged 或导出目录}"
@@ -18,7 +18,7 @@ export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-generic}"
 
 echo "请确保已用 vLLM 加载: ${FINETUNED_DIR}，且 --served-model-name 与 SERVED_MODEL_NAME=${SERVED_MODEL_NAME} 一致" >&2
 
-exec python scripts/run_eval.py \
+exec python scripts/run/run_eval.py \
   --served-model-name "${SERVED_MODEL_NAME}" \
   --base-url "${OPENAI_API_BASE}" \
   --api-key "${OPENAI_API_KEY}" \

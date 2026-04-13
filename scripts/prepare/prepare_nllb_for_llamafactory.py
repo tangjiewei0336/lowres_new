@@ -8,7 +8,7 @@
 
 用法：
   conda activate lowres
-  python scripts/prepare_nllb_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
+  python scripts/prepare/prepare_nllb_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
 
 输出（默认在 training/data/multilingual/nllb/，可用 --out-subdir 改）：
   training/data/multilingual/nllb/nllb_mt_<src>__<tgt>.jsonl
@@ -34,8 +34,11 @@ PREVIEW_N = 50
 
 # 与 prepare_ccmatrix_for_llamafactory 共用码表（见 flores_lang_zh.py）
 _SCRIPTS_DIR = Path(__file__).resolve().parent
+_SCRIPTS_PARENT = _SCRIPTS_DIR.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
+if str(_SCRIPTS_PARENT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_PARENT))
 from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
 
 _ALLENAI_URL = "https://storage.googleapis.com/allennlp-data-bucket/nllb/"
@@ -43,7 +46,7 @@ _STATMT_URL = "http://data.statmt.org/cc-matrix/"
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def ensure_dir(p: Path) -> None:

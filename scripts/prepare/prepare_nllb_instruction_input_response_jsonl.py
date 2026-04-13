@@ -4,11 +4,11 @@
 
 每条样本一行 JSON：{"text": "Instruction: ...\\nInput: ...\\nResponse: ..."}
 
-与 scripts/prepare_nllb_for_llamafactory.py 使用相同的拉取逻辑与语言对解析；仅序列化格式不同。
+与 scripts/prepare/prepare_nllb_for_llamafactory.py 使用相同的拉取逻辑与语言对解析；仅序列化格式不同。
 
 用法：
   conda activate lowres
-  python scripts/prepare_nllb_instruction_input_response_jsonl.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
+  python scripts/prepare/prepare_nllb_instruction_input_response_jsonl.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
 
 输出（默认 training/data/multilingual/nllb_iir/）：
   nllb_iir_<src>__<tgt>.jsonl
@@ -83,7 +83,7 @@ def flores_code_to_en_name(code: str) -> str:
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def ensure_dir(p: Path) -> None:

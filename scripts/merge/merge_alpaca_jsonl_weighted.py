@@ -13,7 +13,7 @@
 见 training/llamafactory_nllb_mt_refine_mix_lora.yaml
 
 示例：
-  python scripts/merge_alpaca_jsonl_weighted.py \\
+  python scripts/merge/merge_alpaca_jsonl_weighted.py \\
     --inputs training/data/multilingual/nllb/nllb_mt_all.jsonl \\
               training/data/draft_refine/nllb/nllb_draft_refine_all.jsonl \\
     --weights 0.7 0.3 --total 100000 \\
@@ -31,7 +31,7 @@ PREVIEW_N = 50
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def read_lines(path: Path) -> list[str]:

@@ -9,11 +9,11 @@
 
 用法：
   conda activate lowres
-  python scripts/prepare_ccmatrix_for_llamafactory.py --src-lang eng_Latn --tgt-lang zho_Hans --limit 200000
+  python scripts/prepare/prepare_ccmatrix_for_llamafactory.py --src-lang eng_Latn --tgt-lang zho_Hans --limit 200000
   # 按 evaluation_config.json 生成的语言对配置批量导出（每个语言对各自 limit）
-  python scripts/prepare_ccmatrix_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
+  python scripts/prepare/prepare_ccmatrix_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --export-from-config
   # 只统计每个语言对在数据集中能取到多少条（不写出文件）
-  python scripts/prepare_ccmatrix_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --count-only
+  python scripts/prepare/prepare_ccmatrix_for_llamafactory.py --pairs-config training/ccmatrix_pair_limits.json --count-only
 
 输出：
   training/data/ccmatrix_mt_<src>__<tgt>.jsonl
@@ -34,8 +34,11 @@ from typing import Any, Iterator
 PREVIEW_N = 50
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
+_SCRIPTS_PARENT = _SCRIPTS_DIR.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
+if str(_SCRIPTS_PARENT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_PARENT))
 from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
 
 # FLORES-200 语言码 -> 常用 ISO639-1（用于 HuggingFace yhavinga/ccmatrix 配置名，如 en-zh）
@@ -51,7 +54,7 @@ HF_LANG_MAP: dict[str, str] = {
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def ensure_dir(p: Path) -> None:

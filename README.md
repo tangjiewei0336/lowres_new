@@ -31,10 +31,10 @@ export MODELSCOPE_CACHE="$PWD/datasets/cache/modelscope"
 
 1. **语法与依赖**：`python scripts/check_syntax_and_imports.py`
 2. **ModelScope 连通性与小样本加载**：`python scripts/check_modelscope_download.py`
-3. **准备数据**（FLORES + NTREX，生成 `datasets/processed/*.jsonl` 与各文件前 50 条预览）：`python scripts/prepare_datasets.py`
+3. **准备数据**（FLORES + NTREX，生成 `datasets/processed/*.jsonl` 与各文件前 50 条预览）：`python scripts/prepare/prepare_datasets.py`
 4. **展开评估清单**：`python scripts/expand_language_pairs.py` → `datasets/eval_manifest.json` 与 `datasets/processed/eval_items_all.jsonl`
 5. **启动 vLLM**（另开终端，与评估分离）：见 `scripts/serve/serve_vllm_*.sh`（使用 `lowres-serve`）
-6. **评估**：编辑并运行 `scripts/run_eval_baseline.sh` 或 `scripts/run_eval_after_ccmatrix.sh`
+6. **评估**：编辑并运行 `scripts/run/run_eval_baseline.sh` 或 `scripts/run/run_eval_after_ccmatrix.sh`
 
 Shell 封装脚本默认使用 `conda` 激活环境：评测脚本用 `lowres`，vLLM serve 脚本建议在 `lowres-serve` 下运行。
 

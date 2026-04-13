@@ -1,6 +1,6 @@
 # Qwen3-4B + NLLB/ccMatrix 句对 SFT（LoRA）
-# 数据为 scripts/prepare_nllb_for_llamafactory.py 导出的 Alpaca jsonl（默认 training/data/multilingual/nllb/），
-# 合并：python scripts/merge_nllb_llamafactory_jsonl.py → multilingual/nllb/nllb_mt_all.jsonl
+# 数据为 scripts/prepare/prepare_nllb_for_llamafactory.py 导出的 Alpaca jsonl（默认 training/data/multilingual/nllb/），
+# 合并：python scripts/merge/merge_nllb_llamafactory_jsonl.py → multilingual/nllb/nllb_mt_all.jsonl
 # 与篇章数据按比例同训：llamafactory_nllb_mt_refine_mix_lora.yaml
 #
 # 运行（conda env lowres）：

@@ -11,7 +11,7 @@ export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"
 python scripts/check_syntax_and_imports.py
 python scripts/check_modelscope_download.py
 if [[ "${RUN_PREPARE_DATASETS:-0}" == "1" ]]; then
-  python scripts/prepare_datasets.py
+  python scripts/prepare/prepare_datasets.py
   python scripts/expand_language_pairs.py
 fi
 echo "check_all 完成。"

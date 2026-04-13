@@ -1,5 +1,5 @@
 # Qwen3-4B：NLLB 篇章级 draft→refine（LoRA）
-# 数据由 scripts/build_nllb_draft_refine_jsonl.py 生成，合并见 scripts/merge_nllb_draft_refine_jsonl.py
+# 数据由 scripts/build_nllb_draft_refine_jsonl.py 生成，合并见 scripts/merge/merge_nllb_draft_refine_jsonl.py
 #
 # 运行（conda env lowres）：
 #   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_draft_refine_lora.yaml

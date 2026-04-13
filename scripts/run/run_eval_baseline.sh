@@ -4,8 +4,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=activate_conda_lowres.sh
-source "${SCRIPT_DIR}/activate_conda_lowres.sh"
-ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT}"
 
 # vLLM OpenAI 兼容地址（与 serve 脚本端口一致）
@@ -43,7 +43,7 @@ if [[ -z "${SERVED_MODEL_NAME:-}" || -z "${EVAL_MODEL_TAG:-}" ]]; then
   exit 1
 fi
 
-exec python scripts/run_eval.py \
+exec python scripts/run/run_eval.py \
   --served-model-name "${SERVED_MODEL_NAME}" \
   --base-url "${OPENAI_API_BASE}" \
   --api-key "${OPENAI_API_KEY}" \

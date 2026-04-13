@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-将 training/data 下按语言拆分的 oscar_pt_<FLORES>.jsonl 合并为一个文件（多语言混合预训练时可用）。
+合并 training/data/draft_refine/nllb 下各语言对的 nllb_draft_refine_*.jsonl（排除 *_all.jsonl），
+供 LLaMAFactory dataset=nllb_draft_refine 使用。
 
-默认输入：training/data/oscar_pt_*.jsonl（忽略 *_all.jsonl）
 输出：
-  training/data/oscar_pt_all.jsonl
-  training/data/previews/oscar_pt_all.preview_50.jsonl
+  training/data/draft_refine/nllb/nllb_draft_refine_all.jsonl
+  training/data/draft_refine/nllb/previews/nllb_draft_refine_all.preview_50.jsonl
 """
 
 from __future__ import annotations
@@ -17,34 +17,34 @@ PREVIEW_N = 50
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="合并 OSCAR 预训练 jsonl")
+    ap = argparse.ArgumentParser(description="合并 NLLB draft/refine Alpaca jsonl")
     ap.add_argument(
         "--data-dir",
         type=Path,
-        default=root() / "training" / "data",
-        help="包含 oscar_pt_*.jsonl 的目录",
+        default=root() / "training" / "data" / "draft_refine" / "nllb",
+        help="包含 nllb_draft_refine_*.jsonl 的目录",
     )
     ap.add_argument(
         "--out",
         type=Path,
         default=None,
-        help="输出路径（默认 <data-dir>/oscar_pt_all.jsonl）",
+        help="输出路径（默认 <data-dir>/nllb_draft_refine_all.jsonl）",
     )
     args = ap.parse_args()
 
     data_dir = args.data_dir
-    out_path = args.out or (data_dir / "oscar_pt_all.jsonl")
+    out_path = args.out or (data_dir / "nllb_draft_refine_all.jsonl")
     prev_dir = data_dir / "previews"
     prev_dir.mkdir(parents=True, exist_ok=True)
     prev_path = prev_dir / f"{out_path.stem}.preview_{PREVIEW_N}.jsonl"
 
-    files = sorted(p for p in data_dir.glob("oscar_pt_*.jsonl") if p.name != out_path.name)
+    files = sorted(p for p in data_dir.glob("nllb_draft_refine_*.jsonl") if p.name != out_path.name)
     if not files:
-        raise SystemExit(f"未找到输入: {data_dir}/oscar_pt_*.jsonl")
+        raise SystemExit(f"未找到输入文件: {data_dir}/nllb_draft_refine_*.jsonl")
 
     written = 0
     preview_lines: list[str] = []
@@ -62,7 +62,9 @@ def main() -> int:
                     written += 1
 
     prev_path.write_text("\n".join(preview_lines) + ("\n" if preview_lines else ""), encoding="utf-8")
-    print(f"合并完成: {out_path} 共 {written} 条；预览: {prev_path}")
+    print(f"合并完成: {out_path} 共 {written} 条")
+    print(f"预览: {prev_path}")
+    print("包含文件：")
     for p in files:
         print(f"  - {p}")
     return 0

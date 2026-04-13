@@ -10,7 +10,7 @@
 #   llamafactory-cli train /root/lowres_new/training/llamafactory_nllb_mt_refine_mix_lora.yaml
 #
 # 若不想在训练时混合、而是预先合成单一 jsonl，见：
-#   scripts/merge_alpaca_jsonl_weighted.py
+#   scripts/merge/merge_alpaca_jsonl_weighted.py
 
 ### model
 model_name_or_path: /root/lowres_new/models/Qwen3-4B_20260407_033755

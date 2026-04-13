@@ -28,8 +28,8 @@ LLaMAFactory 注册示例（dataset_info.json 片段，file_name 相对 dataset_
 
 用法：
   conda activate lowres
-  python scripts/prepare_oscar_pretrain_for_llamafactory.py --limit 50000
-  python scripts/prepare_oscar_pretrain_for_llamafactory.py --flores-lang spa_Latn vie_Latn --limit 10000
+  python scripts/prepare/prepare_oscar_pretrain_for_llamafactory.py --limit 50000
+  python scripts/prepare/prepare_oscar_pretrain_for_llamafactory.py --flores-lang spa_Latn vie_Latn --limit 10000
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ FLORES_TO_OSCAR_SUBSET: dict[str, str] = {
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def ensure_dir(p: Path) -> None:

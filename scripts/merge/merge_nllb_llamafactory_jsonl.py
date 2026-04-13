@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-将 training/data 下多个 ccmatrix_mt_<src>__<tgt>.jsonl 合并为一个文件，供 LLaMAFactory 使用。
+将 training/data 下多个 nllb_mt_<src>__<tgt>.jsonl 合并为一个文件，供 LLaMAFactory 使用。
 
-默认输入模式：training/data/ccmatrix_mt_*.jsonl（会忽略 *_all.jsonl）
+默认输入：training/data/multilingual/nllb/nllb_mt_*.jsonl（忽略 *_all.jsonl）
 输出：
-  training/data/ccmatrix_mt_all.jsonl
-  training/data/previews/ccmatrix_mt_all.preview_50.jsonl
+  training/data/multilingual/nllb/nllb_mt_all.jsonl
+  training/data/multilingual/nllb/previews/nllb_mt_all.preview_50.jsonl
 """
 
 from __future__ import annotations
@@ -17,34 +17,34 @@ PREVIEW_N = 50
 
 
 def root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="合并 ccMatrix Alpaca jsonl 为单文件")
+    ap = argparse.ArgumentParser(description="合并 NLLB Alpaca jsonl 为单文件")
     ap.add_argument(
         "--data-dir",
         type=Path,
-        default=root() / "training" / "data",
-        help="包含 ccmatrix_mt_*.jsonl 的目录",
+        default=root() / "training" / "data" / "multilingual" / "nllb",
+        help="包含 nllb_mt_*.jsonl 的目录",
     )
     ap.add_argument(
         "--out",
         type=Path,
         default=None,
-        help="输出文件路径（默认 <data-dir>/ccmatrix_mt_all.jsonl）",
+        help="输出文件路径（默认 <data-dir>/nllb_mt_all.jsonl）",
     )
     args = ap.parse_args()
 
     data_dir = args.data_dir
-    out_path = args.out or (data_dir / "ccmatrix_mt_all.jsonl")
+    out_path = args.out or (data_dir / "nllb_mt_all.jsonl")
     prev_dir = data_dir / "previews"
     prev_dir.mkdir(parents=True, exist_ok=True)
     prev_path = prev_dir / f"{out_path.stem}.preview_{PREVIEW_N}.jsonl"
 
-    files = sorted(p for p in data_dir.glob("ccmatrix_mt_*.jsonl") if p.name != out_path.name)
+    files = sorted(p for p in data_dir.glob("nllb_mt_*.jsonl") if p.name != out_path.name)
     if not files:
-        raise SystemExit(f"未找到输入文件: {data_dir}/ccmatrix_mt_*.jsonl")
+        raise SystemExit(f"未找到输入文件: {data_dir}/nllb_mt_*.jsonl")
 
     written = 0
     preview_lines: list[str] = []
@@ -72,4 +72,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
