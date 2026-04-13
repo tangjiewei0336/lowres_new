@@ -2,6 +2,9 @@
 """
 从 Hugging Face 数据集 `HuggingFaceFW/fineweb-2` 下载指定语言子集，
 并转换为 LLaMAFactory 可用的单语预训练 JSONL（每行 `{"text": "..."}`）。
+导出完成后默认在输出目录生成：
+- dataset.info
+- dataset_info.json
 
 默认会读取仓库根目录 `evaluation_config.json`，校验目标语言是否在评测配置中出现。
 
@@ -13,6 +16,11 @@
   # 不传 --lang：自动从 evaluation_config.json 的 language_pair_groups 抽取语言并逐个导出
   conda run -n lowres python scripts/prepare/prepare_fineweb2_monolingual_for_llamafactory.py \
     --limit 200000
+
+  # 指定 dataset.info 路径
+  conda run -n lowres python scripts/prepare/prepare_fineweb2_monolingual_for_llamafactory.py \
+    --limit 200000 \
+    --dataset-info-path training/data/monolingual/dataset.info
 """
 
 from __future__ import annotations
@@ -36,6 +44,17 @@ def root() -> Path:
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def write_dataset_info(
+    path: Path,
+    entries: dict[str, dict[str, Any]],
+) -> None:
+    ensure_dir(path.parent)
+    path.write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def load_allowed_langs_from_eval_config(path: Path) -> set[str]:
@@ -131,6 +150,22 @@ def main() -> int:
         action="store_true",
         help="默认启用硬退出规避 datasets 在部分环境的退出崩溃；传此参数可关闭该行为",
     )
+    ap.add_argument(
+        "--dataset-prefix",
+        default="fineweb2_pt",
+        help="dataset.info 中的数据集名前缀（默认 fineweb2_pt）",
+    )
+    ap.add_argument(
+        "--dataset-info-path",
+        type=Path,
+        default=None,
+        help="可选：写入 dataset.info 路径（默认 <out-dir>/dataset.info）",
+    )
+    ap.add_argument(
+        "--no-dataset-info",
+        action="store_true",
+        help="不生成 dataset.info 与 dataset_info.json",
+    )
     args = ap.parse_args()
 
     if not args.evaluation_config.exists():
@@ -183,6 +218,7 @@ def main() -> int:
     prev_dir = out_dir / "previews"
     ensure_dir(out_dir)
     ensure_dir(prev_dir)
+    dataset_entries: dict[str, dict[str, Any]] = {}
 
     from datasets import get_dataset_config_names, load_dataset
 
@@ -259,6 +295,20 @@ def main() -> int:
         )
         print(f"[{lang}] 完成：{out_path}，共 {written} 条")
         print(f"[{lang}] 预览：{prev_path}")
+        dataset_name = f"{args.dataset_prefix}_{lang}"
+        dataset_entries[dataset_name] = {
+            "file_name": out_path.name,
+            "formatting": "alpaca",
+            "columns": {"prompt": "text", "response": None},
+        }
+
+    if dataset_entries and not args.no_dataset_info:
+        dataset_info_path = args.dataset_info_path or (out_dir / "dataset.info")
+        dataset_info_json_path = dataset_info_path.with_name("dataset_info.json")
+        write_dataset_info(dataset_info_path, dataset_entries)
+        write_dataset_info(dataset_info_json_path, dataset_entries)
+        print(f"[dataset.info] 已生成：{dataset_info_path}")
+        print(f"[dataset_info.json] 已生成：{dataset_info_json_path}")
 
     # 经验兼容：当前 lowres 环境里，datasets streaming 读 FineWeb-2 后
     # 在解释器退出阶段可能触发 "terminate called without an active exception"。

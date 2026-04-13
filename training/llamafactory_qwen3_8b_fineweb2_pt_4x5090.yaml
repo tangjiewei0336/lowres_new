@@ -1,0 +1,47 @@
+# Qwen3-8B + FineWeb2 单语数据继续预训练（4 x RTX 5090 32GB）
+#
+# 运行：
+#   conda activate lowres
+#   CUDA_VISIBLE_DEVICES=0,1,2,3 llamafactory-cli train /root/lowres_new/training/llamafactory_qwen3_8b_fineweb2_pt_4x5090.yaml
+#
+# 说明：
+# - 本配置面向 4 卡 5090（32GB）保守起步。
+# - 若 OOM：先降低 cutoff_len 到 768 或 512，再增大 gradient_accumulation_steps。
+# - 已接入 DeepSpeed ZeRO-3（不启用 CPU/NVMe offload）。
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-8B_latest
+trust_remote_code: true
+
+### method
+stage: pt
+do_train: true
+finetuning_type: full
+
+### dataset
+dataset_dir: /root/lowres_new/training/data/monolingual
+dataset: fineweb2_pt_eng_Latn,fineweb2_pt_zho_Hans,fineweb2_pt_spa_Latn,fineweb2_pt_ind_Latn,fineweb2_pt_vie_Latn,fineweb2_pt_tha_Thai,fineweb2_pt_tgl_Latn
+template: qwen
+cutoff_len: 1024
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-8B_fineweb2_pt_4x5090
+logging_steps: 20
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 1.0e-5
+max_steps: 30000
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+optim: adamw_torch
+deepspeed: /root/lowres_new/training/deepspeed_zero3_no_offload.json
+gradient_checkpointing: true
+bf16: true
+ddp_timeout: 180000000
