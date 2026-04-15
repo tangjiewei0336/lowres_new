@@ -28,6 +28,11 @@ export SERVED_MODEL_NAME=qwen3-8b
 export EVAL_MODEL_TAG=baseline_qwen3_8b
 export EVAL_MODEL_FAMILY=qwen3
 
+# --- Qwen3.5-27B-Instruct alias（先 download_models_to_models_dir.py --only qwen3_5_27b_instruct，再 scripts/serve/run.sh qwen3.5-27b-instruct）---
+# export SERVED_MODEL_NAME=qwen3.5-27b-instruct
+# export EVAL_MODEL_TAG=baseline_qwen3_5_27b_instruct
+# export EVAL_MODEL_FAMILY=qwen3.5
+
 # --- Qwen3-4B-Instruct-2507（先 download_models_to_models_dir.py --only qwen3_4b_instruct_2507，再 serve_vllm_qwen3_instruct_2507.sh）---
 # export SERVED_MODEL_NAME=qwen3-4b-instruct-2507
 # export EVAL_MODEL_TAG=baseline_qwen3_4b_instruct_2507
