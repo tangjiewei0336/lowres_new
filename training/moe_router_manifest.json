@@ -1,0 +1,147 @@
+{
+  "description": "Route each language pair to its dedicated LoRA expert adapter.",
+  "base_model": "/root/lowres_new/models/Qwen3-8B_latest",
+  "served_model_name": "qwen3-8b-moe-router",
+  "experts": [
+    {
+      "src_lang": "spa_Latn",
+      "tgt_lang": "zho_Hans",
+      "dataset": "nllb_moe_spa_Latn_to_zho_Hans",
+      "adapter_name": "qwen3_8b_moe_spa_Latn_to_zho_Hans",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_spa_Latn_to_zho_Hans"
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "spa_Latn",
+      "dataset": "nllb_moe_zho_Hans_to_spa_Latn",
+      "adapter_name": "qwen3_8b_moe_zho_Hans_to_spa_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_zho_Hans_to_spa_Latn"
+    },
+    {
+      "src_lang": "spa_Latn",
+      "tgt_lang": "eng_Latn",
+      "dataset": "nllb_moe_spa_Latn_to_eng_Latn",
+      "adapter_name": "qwen3_8b_moe_spa_Latn_to_eng_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_spa_Latn_to_eng_Latn"
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "spa_Latn",
+      "dataset": "nllb_moe_eng_Latn_to_spa_Latn",
+      "adapter_name": "qwen3_8b_moe_eng_Latn_to_spa_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_eng_Latn_to_spa_Latn"
+    },
+    {
+      "src_lang": "ind_Latn",
+      "tgt_lang": "zho_Hans",
+      "dataset": "nllb_moe_ind_Latn_to_zho_Hans",
+      "adapter_name": "qwen3_8b_moe_ind_Latn_to_zho_Hans",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_ind_Latn_to_zho_Hans"
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "ind_Latn",
+      "dataset": "nllb_moe_zho_Hans_to_ind_Latn",
+      "adapter_name": "qwen3_8b_moe_zho_Hans_to_ind_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_zho_Hans_to_ind_Latn"
+    },
+    {
+      "src_lang": "ind_Latn",
+      "tgt_lang": "eng_Latn",
+      "dataset": "nllb_moe_ind_Latn_to_eng_Latn",
+      "adapter_name": "qwen3_8b_moe_ind_Latn_to_eng_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_ind_Latn_to_eng_Latn"
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "ind_Latn",
+      "dataset": "nllb_moe_eng_Latn_to_ind_Latn",
+      "adapter_name": "qwen3_8b_moe_eng_Latn_to_ind_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_eng_Latn_to_ind_Latn"
+    },
+    {
+      "src_lang": "vie_Latn",
+      "tgt_lang": "zho_Hans",
+      "dataset": "nllb_moe_vie_Latn_to_zho_Hans",
+      "adapter_name": "qwen3_8b_moe_vie_Latn_to_zho_Hans",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_vie_Latn_to_zho_Hans"
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "vie_Latn",
+      "dataset": "nllb_moe_zho_Hans_to_vie_Latn",
+      "adapter_name": "qwen3_8b_moe_zho_Hans_to_vie_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_zho_Hans_to_vie_Latn"
+    },
+    {
+      "src_lang": "vie_Latn",
+      "tgt_lang": "eng_Latn",
+      "dataset": "nllb_moe_vie_Latn_to_eng_Latn",
+      "adapter_name": "qwen3_8b_moe_vie_Latn_to_eng_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_vie_Latn_to_eng_Latn"
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "vie_Latn",
+      "dataset": "nllb_moe_eng_Latn_to_vie_Latn",
+      "adapter_name": "qwen3_8b_moe_eng_Latn_to_vie_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_eng_Latn_to_vie_Latn"
+    },
+    {
+      "src_lang": "tha_Thai",
+      "tgt_lang": "zho_Hans",
+      "dataset": "nllb_moe_tha_Thai_to_zho_Hans",
+      "adapter_name": "qwen3_8b_moe_tha_Thai_to_zho_Hans",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_tha_Thai_to_zho_Hans"
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "tha_Thai",
+      "dataset": "nllb_moe_zho_Hans_to_tha_Thai",
+      "adapter_name": "qwen3_8b_moe_zho_Hans_to_tha_Thai",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_zho_Hans_to_tha_Thai"
+    },
+    {
+      "src_lang": "tha_Thai",
+      "tgt_lang": "eng_Latn",
+      "dataset": "nllb_moe_tha_Thai_to_eng_Latn",
+      "adapter_name": "qwen3_8b_moe_tha_Thai_to_eng_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_tha_Thai_to_eng_Latn"
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "tha_Thai",
+      "dataset": "nllb_moe_eng_Latn_to_tha_Thai",
+      "adapter_name": "qwen3_8b_moe_eng_Latn_to_tha_Thai",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_eng_Latn_to_tha_Thai"
+    },
+    {
+      "src_lang": "tgl_Latn",
+      "tgt_lang": "zho_Hans",
+      "dataset": "nllb_moe_tgl_Latn_to_zho_Hans",
+      "adapter_name": "qwen3_8b_moe_tgl_Latn_to_zho_Hans",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_tgl_Latn_to_zho_Hans"
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "tgl_Latn",
+      "dataset": "nllb_moe_zho_Hans_to_tgl_Latn",
+      "adapter_name": "qwen3_8b_moe_zho_Hans_to_tgl_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_zho_Hans_to_tgl_Latn"
+    },
+    {
+      "src_lang": "tgl_Latn",
+      "tgt_lang": "eng_Latn",
+      "dataset": "nllb_moe_tgl_Latn_to_eng_Latn",
+      "adapter_name": "qwen3_8b_moe_tgl_Latn_to_eng_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_tgl_Latn_to_eng_Latn"
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "tgl_Latn",
+      "dataset": "nllb_moe_eng_Latn_to_tgl_Latn",
+      "adapter_name": "qwen3_8b_moe_eng_Latn_to_tgl_Latn",
+      "adapter_path": "/root/lowres_new/models/Qwen3-8B_moe_pair_experts/qwen3_8b_moe_eng_Latn_to_tgl_Latn"
+    }
+  ]
+}

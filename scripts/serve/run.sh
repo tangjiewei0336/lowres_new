@@ -21,12 +21,14 @@ usage() {
   qwen3, qwen3-4b           Qwen3-4B 基座（关闭 thinking）
   qwen3-8b                  Qwen3-8B 基座（关闭 thinking）
   qwen3-instruct-2507       Qwen3-4B-Instruct-2507
+  qwen3.5-27b-instruct      Qwen3.5-27B（关闭 thinking，Instruct alias）
   smollm3                   SmolLM3-3B
   hunyuan-mt, hunyuan       HY-MT1.5-1.8B
 
 示例:
   bash scripts/serve/run.sh qwen3-4b
   bash scripts/serve/run.sh qwen3-8b
+  TENSOR_PARALLEL_SIZE=4 bash scripts/serve/run.sh qwen3.5-27b-instruct
   MODEL_PATH=/path/to/merged bash scripts/serve/run.sh qwen3-instruct-2507
 EOF
 }
@@ -46,6 +48,9 @@ case "${1}" in
     ;;
   qwen3-instruct-2507|qwen3_4b_instruct_2507)
     exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_instruct_2507.sh"
+    ;;
+  qwen3.5-27b-instruct|qwen3_5_27b_instruct|qwen35-27b-instruct|qwen35_27b_instruct)
+    exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_5_27b_instruct.sh"
     ;;
   smollm3|smollm)
     exec bash "${SCRIPT_DIR}/serve_vllm_smollm3.sh"
