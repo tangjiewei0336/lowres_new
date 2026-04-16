@@ -9,8 +9,9 @@ synthetic generation script:
 Each output row:
   {"text": "..."}
 
-The default FineWeb config is sample-10BT to avoid accidentally streaming the
-full dataset.
+The default FineWeb source is sample/10BT to avoid accidentally streaming the
+full dataset. The script first tries the official config name sample-10BT, then
+falls back to direct parquet streaming from sample/10BT/*.parquet.
 """
 
 from __future__ import annotations
@@ -107,6 +108,45 @@ def import_hf_load_dataset():
     return load_dataset
 
 
+def load_fineweb_streaming_dataset(
+    load_dataset,
+    *,
+    repo_id: str,
+    config: str,
+    data_files: str,
+    split: str,
+    token: str | bool | None,
+    loader: str,
+):
+    if loader not in ("auto", "config", "parquet"):
+        raise ValueError(f"invalid loader: {loader}")
+
+    if loader in ("auto", "config"):
+        try:
+            print(f"Loading via dataset config: repo={repo_id} config={config} split={split}")
+            return load_dataset(repo_id, config, split=split, streaming=True, token=token)
+        except Exception as e:
+            if loader == "config":
+                raise
+            print(f"Config loader failed, fallback to parquet data_files: {e}", file=sys.stderr)
+
+    # FineWeb files are stored under paths such as sample/10BT/*.parquet.
+    # The hf:// URI avoids relying on the dataset builder config list, which can
+    # fail behind some mirrors or with older datasets versions.
+    if data_files.startswith("hf://"):
+        hf_data_files = data_files
+    else:
+        hf_data_files = f"hf://datasets/{repo_id}/{data_files}"
+    print(f"Loading via parquet: data_files={hf_data_files} split={split}")
+    return load_dataset(
+        "parquet",
+        data_files={split: hf_data_files},
+        split=split,
+        streaming=True,
+        token=token,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="FineWeb English -> LLaMA-Factory monolingual JSONL")
     ap.add_argument("--repo-id", default="HuggingFaceFW/fineweb")
@@ -114,6 +154,17 @@ def main() -> int:
         "--config",
         default="sample-10BT",
         help="FineWeb config. Default sample-10BT; use default/full configs only intentionally.",
+    )
+    ap.add_argument(
+        "--data-files",
+        default="sample/10BT/*.parquet",
+        help="Fallback parquet files under repo. Default sample/10BT/*.parquet.",
+    )
+    ap.add_argument(
+        "--loader",
+        choices=("auto", "config", "parquet"),
+        default="auto",
+        help="auto=config first then parquet fallback; parquet avoids FineWeb config discovery.",
     )
     ap.add_argument("--split", default="train")
     ap.add_argument("--limit", type=int, default=250_000, help="Max rows to write; 0 means unlimited.")
@@ -163,14 +214,15 @@ def main() -> int:
 
     load_dataset = import_hf_load_dataset()
 
-    print(f"Loading {args.repo_id} config={args.config} split={args.split} streaming=True")
     print(f"Output: {out_path}")
-    ds = load_dataset(
-        args.repo_id,
-        args.config,
+    ds = load_fineweb_streaming_dataset(
+        load_dataset,
+        repo_id=args.repo_id,
+        config=args.config,
+        data_files=args.data_files,
         split=args.split,
-        streaming=True,
         token=token,
+        loader=args.loader,
     )
 
     written = 0
