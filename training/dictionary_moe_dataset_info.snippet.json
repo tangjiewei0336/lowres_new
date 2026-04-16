@@ -1,0 +1,182 @@
+{
+  "dictionary_moe_spa_Latn_to_zho_Hans": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_spa_Latn__zho_Hans.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_zho_Hans_to_spa_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_zho_Hans__spa_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_spa_Latn_to_eng_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_spa_Latn__eng_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_eng_Latn_to_spa_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_eng_Latn__spa_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_ind_Latn_to_zho_Hans": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_ind_Latn__zho_Hans.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_zho_Hans_to_ind_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_zho_Hans__ind_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_ind_Latn_to_eng_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_ind_Latn__eng_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_eng_Latn_to_ind_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_eng_Latn__ind_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_vie_Latn_to_zho_Hans": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_vie_Latn__zho_Hans.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_zho_Hans_to_vie_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_zho_Hans__vie_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_vie_Latn_to_eng_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_vie_Latn__eng_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_eng_Latn_to_vie_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_eng_Latn__vie_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_tha_Thai_to_zho_Hans": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_tha_Thai__zho_Hans.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_zho_Hans_to_tha_Thai": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_zho_Hans__tha_Thai.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_tha_Thai_to_eng_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_tha_Thai__eng_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_eng_Latn_to_tha_Thai": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_eng_Latn__tha_Thai.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_tgl_Latn_to_zho_Hans": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_tgl_Latn__zho_Hans.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_zho_Hans_to_tgl_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_zho_Hans__tgl_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_tgl_Latn_to_eng_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_tgl_Latn__eng_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "dictionary_moe_eng_Latn_to_tgl_Latn": {
+    "file_name": "multilingual/dictionary_moe/dict_mt_eng_Latn__tgl_Latn.jsonl",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  }
+}

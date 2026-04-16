@@ -198,6 +198,98 @@ python scripts/prepare/prepare_nllb_for_llamafactory.py \
 }
 ```
 
+### dictionary MoE prepare scripts
+
+用途：准备基于词典的低资源翻译补充数据。第一版覆盖 20 个 MoE 方向：`spa_Latn`、`ind_Latn`、`vie_Latn`、`tha_Thai`、`tgl_Latn` 分别与 `eng_Latn`、`zho_Hans` 双向互译。
+
+- `scripts/dictionary/prepare_muse_dictionary.py`
+  - 数据源：facebookresearch MUSE bilingual dictionaries，默认 URL 形如 `https://dl.fbaipublicfiles.com/arrival/dictionaries/es-en.txt`。
+  - 默认语言：`es/id/vi/th/tl/zh <-> en`，其中 `tl` 映射 `tgl_Latn`。
+  - 输出 raw：`training/data/dictionaries/raw/muse/<muse_src>-<muse_tgt>.txt`。
+  - 输出 lexicon：`training/data/dictionaries/lexicon/dict_terms_<src>__<tgt>.jsonl`。
+- `scripts/dictionary/prepare_cc_cedict_dictionary.py`
+  - 数据源：CC-CEDICT via MDBG，默认 URL `https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz`。
+  - 用途：补 `zho_Hans <-> eng_Latn`，并过滤明显繁体中文表面词。
+  - 输出 lexicon：`dict_terms_zho_Hans__eng_Latn.jsonl` 与 `dict_terms_eng_Latn__zho_Hans.jsonl`。
+- `scripts/dictionary/build_pivot_dictionary.py`
+  - 用途：用英文精确 pivot 构造低资源语言与简体中文互译词典。
+  - 输入目录：`training/data/dictionaries/lexicon/`。
+  - 输出目录：`training/data/dictionaries/moe_lexicon/`。
+- `scripts/dictionary/build_dictionary_mt_jsonl.py`
+  - 用途：把词典 lexicon 转成 LLaMA-Factory Alpaca JSONL。
+  - 默认读取 `training/moe_pair_limits.json` 的 20 个方向。
+  - 输出目录：`training/data/multilingual/dictionary_moe/`。
+  - dataset 注册片段：`training/dictionary_moe_dataset_info.snippet.json`，并默认更新 `training/data/dataset_info.json`。
+- 一键入口：`scripts/dictionary/prepare_dictionary_moe_for_llamafactory.py`。
+  - 默认先准备 CC-CEDICT，再准备 MUSE；因此自动 pivot 默认使用 MUSE 的 `zh-en` 双语词典，避免把 CC-CEDICT 英文释义倒排成噪声中文翻译。
+
+运行：
+
+```bash
+conda activate lowres
+python scripts/dictionary/prepare_dictionary_moe_for_llamafactory.py
+```
+
+如需先做小样本检查：
+
+```bash
+python scripts/dictionary/prepare_dictionary_moe_for_llamafactory.py --limit-per-direction 2000
+```
+
+这里的 `--limit-per-direction` 只限制 pivot 后 lexicon 与最终 Alpaca 输出；下载和归一化默认保留完整词典，避免小样本截断导致英文 pivot 没有交集。若确实想限制归一化阶段，可额外传 `--normalize-limit-per-direction`。
+
+词典 lexicon 每行 JSONL 字段：
+
+```json
+{
+  "source": "muse",
+  "src_lang": "spa_Latn",
+  "tgt_lang": "eng_Latn",
+  "source_text": "...",
+  "target_text": "...",
+  "target_candidates": ["..."],
+  "confidence": 0.82,
+  "relation": "translation",
+  "source_url": "https://...",
+  "license_note": "..."
+}
+```
+
+最终 Alpaca 数据每行字段：
+
+```json
+{
+  "instruction": "Translate the following Spanish dictionary term into English. Output only the best translation.",
+  "input": "...",
+  "output": "..."
+}
+```
+
+#### dictionary_moe 与句级数据的训练关系
+
+最终指标只看 FLORES 和 COMET 时，`dictionary_moe` 不应替代 NLLB / FineWeb 合成句对。它的定位是低资源方向的词汇锚点数据，用来补术语、常见词和短语覆盖；主优化目标仍应是自然句翻译质量。
+
+方案 A：混合训练，推荐默认方案。
+
+- 每个 pair expert 使用同方向句级数据为主：`training/data/multilingual/nllb_moe/`、`training/data/multilingual/fineweb2_synth/`。
+- 同方向 `dictionary_moe` 以小权重混入：建议 `3% - 10%`，默认先试 `5%`。
+- 示例比例：`NLLB/FineWeb sentence pairs = 95%`，`dictionary_moe = 5%`。
+- 优点：训练分布仍接近 FLORES/COMET 的句级评测，同时给低资源方向补词汇召回。
+
+方案 B：两阶段训练，但最终阶段仍以句级数据为主。
+
+- Stage 1：`dictionary_moe + 少量句级数据`，短训 `0.1 - 0.3 epoch`，相当于先做词汇热身。
+- Stage 2：`句级数据为主 + dictionary_moe 小比例混合`，正式训练 pair expert。
+- 不建议 Stage 2 只训词典；否则模型容易偏向短词条翻译，损害自然句输出。
+
+方案 C：词典只做数据增强或质检，不直接训练。
+
+- 用 `dictionary_moe` 检查合成句对里的关键词是否错译。
+- 用词典构造 hard examples，或筛掉明显不符合词典约束的伪平行数据。
+- 适合后续提高数据质量，但第一版不如方案 A 直接。
+
+当前建议：先采用方案 A。也就是继续训练 pair-level LoRA MoE，每个 expert 按同一方向混入约 `5%` 的 `dictionary_moe`，最终仍只用 FLORES 和 COMET 评估。等 baseline 有结果后，再比较 `0% / 5% / 10% dictionary_moe` 三个 ablation。
+
 ### prepare_fineweb2_monolingual_for_llamafactory.py
 
 用途：准备单语继续预训练数据，输出 LLaMA-Factory 可用的 `{"text": "..."}` JSONL，并生成 `dataset.info` / `dataset_info.json`。
