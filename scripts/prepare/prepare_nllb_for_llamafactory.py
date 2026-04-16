@@ -221,8 +221,6 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    nllb, ccm, mp = load_nllb_lang_pairs()
-
     data_root = root() / "training" / "data"
     out_dir = data_root / args.out_subdir
     prev_dir = out_dir / "previews"
@@ -260,13 +258,22 @@ def main() -> int:
         conf = json.loads(args.pairs_config.read_text(encoding="utf-8"))
         pairs = conf.get("pairs") or []
         if not isinstance(pairs, list) or not pairs:
-            raise SystemExit(f"配置文件无 pairs: {args.pairs_config}")
+            hint = ""
+            if "language_pair_groups" in conf:
+                hint = (
+                    "\n你传入的看起来是 evaluation_config.json；本脚本需要 "
+                    "training/moe_pair_limits.json 或 training/ccmatrix_pair_limits.json 这种含 pairs 的配置。"
+                    "\nMoE 数据可直接运行：python scripts/prepare/prepare_nllb_moe_for_llamafactory.py"
+                )
+            raise SystemExit(f"配置文件无 pairs: {args.pairs_config}{hint}")
+        nllb, ccm, mp = load_nllb_lang_pairs()
         for it in pairs:
             run_one(str(it["src_lang"]), str(it["tgt_lang"]), int(it["limit"]) if it.get("limit") is not None else None)
         return 0
 
     if not args.src_lang or not args.tgt_lang:
         ap.error("请提供 --src-lang/--tgt-lang，或使用 --export-from-config")
+    nllb, ccm, mp = load_nllb_lang_pairs()
     run_one(args.src_lang, args.tgt_lang, args.limit)
     return 0
 

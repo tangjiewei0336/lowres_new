@@ -40,7 +40,11 @@ ZHO = "zho_Hans"
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
+LANG_EN = {
+    "eng_Latn": "English",
+    "zho_Hans": "Simplified Chinese",
+    "tha_Thai": "Thai",
+}
 
 # Common Traditional-only characters. This intentionally favors precision over
 # completeness; any hit rejects the text because the requested corpus is zho_Hans.
@@ -160,10 +164,10 @@ def iter_clean_sources(
 
 
 def make_instruction(src: str, tgt: str) -> str:
-    return (
-        f"请将以下 {flores_code_to_zh_name(src)} 文本翻译为 "
-        f"{flores_code_to_zh_name(tgt)}，只输出译文。"
-    )
+    src_name = LANG_EN.get(src, src)
+    tgt_name = LANG_EN.get(tgt, tgt)
+    extra = " Do not use Traditional Chinese." if tgt == ZHO else ""
+    return f"Translate the following {src_name} text into {tgt_name}. Output only the translation.{extra}"
 
 
 def mt_user_content(src_lang: str, tgt_lang: str, text: str) -> str:
