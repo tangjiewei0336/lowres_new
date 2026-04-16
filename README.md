@@ -222,6 +222,36 @@ python scripts/prepare/prepare_nllb_for_llamafactory.py \
 }
 ```
 
+### prepare_fineweb_english_for_llamafactory.py
+
+用途：从 Hugging Face `HuggingFaceFW/fineweb` 准备英语单语数据，补齐英泰合成数据需要的 English source。
+
+- 数据源：Hugging Face `HuggingFaceFW/fineweb`。
+- 默认配置：`sample-10BT`，避免误拉全量 FineWeb。
+- split：默认 `train`。
+- limit：默认 `250000` 条；`--limit 0` 表示不限制。
+- 文本字段：默认尝试 `text`、`content`、`raw_content`，否则取行内字符串字段。
+- 过滤：默认 `--min-chars 20`、`--min-latin-ratio 0.55`。
+- 默认输出目录：`training/data/monolingual/`。
+- 默认输出文件：`training/data/monolingual/fineweb2_pt_eng_Latn.jsonl`。文件名保持这个形式是为了兼容英泰合成脚本的默认输入路径。
+- 预览文件：`training/data/monolingual/previews/fineweb2_pt_eng_Latn.preview_50.jsonl`。
+- dataset 注册：`training/data/monolingual/dataset.info` 和 `dataset_info.json`，数据集名默认 `fineweb2_pt_eng_Latn`。
+
+运行：
+
+```bash
+conda activate lowres
+python scripts/prepare/prepare_fineweb_english_for_llamafactory.py --limit 250000
+```
+
+每行 JSONL 字段：
+
+```json
+{
+  "text": "..."
+}
+```
+
 ### prepare_oscar_pretrain_for_llamafactory.py
 
 用途：准备 OSCAR-2301 单语继续预训练数据，输出 `{"text": "..."}` JSONL。
