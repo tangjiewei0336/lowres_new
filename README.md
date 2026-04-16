@@ -252,6 +252,36 @@ python scripts/prepare/prepare_fineweb_english_for_llamafactory.py --limit 25000
 }
 ```
 
+### prepare_wikipedia_english_for_llamafactory.py
+
+用途：从 Hugging Face `wikimedia/wikipedia` 准备高质量英语单语数据。FineWeb 访问失败时优先用这个脚本补齐英泰合成数据的 English source。
+
+- 数据源：Hugging Face `wikimedia/wikipedia`。
+- 默认配置：`20231101.en`。
+- split：默认 `train`。
+- limit：默认 `250000` 条；`--limit 0` 表示不限制。
+- 文本字段：默认 `text`。
+- 过滤：默认 `--min-chars 80`、`--min-latin-ratio 0.55`。
+- 长文截断：默认 `--max-chars 1200`，避免单条 article 太长；`--max-chars 0` 表示不截断。
+- 默认输出文件：`training/data/monolingual/fineweb2_pt_eng_Latn.jsonl`，保持兼容英泰合成脚本。
+- 预览文件：`training/data/monolingual/previews/fineweb2_pt_eng_Latn.preview_50.jsonl`。
+
+运行：
+
+```bash
+conda activate lowres
+python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py --limit 250000
+```
+
+如果 config 发现失败，可强制读 parquet：
+
+```bash
+python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py \
+  --loader parquet \
+  --data-files '20231101.en/train-*.parquet' \
+  --limit 250000
+```
+
 ### prepare_oscar_pretrain_for_llamafactory.py
 
 用途：准备 OSCAR-2301 单语继续预训练数据，输出 `{"text": "..."}` JSONL。
