@@ -180,6 +180,70 @@ def build_extra_body(model_family: str) -> dict[str, Any] | None:
     return None
 
 
+def comet_disabled(comet_model: str) -> bool:
+    return str(comet_model).lower() in ("none", "off", "disable", "disabled")
+
+
+def _find_comet_ckpt(path: Path) -> str | None:
+    if path.is_file():
+        return str(path)
+    cand = path / "checkpoints" / "model.ckpt"
+    if cand.is_file():
+        return str(cand)
+    ckpts = sorted(path.glob("**/*.ckpt"))
+    if ckpts:
+        return str(ckpts[0])
+    return None
+
+
+def prepare_comet_checkpoint(comet_model: str, run_dir: Path) -> tuple[str | None, Any | None, Any | None]:
+    """
+    Import and download/resolve COMET before translation starts.
+
+    This makes network/model-cache failures fail early instead of after all vLLM
+    generations have already completed. Returns (checkpoint, torch, load_fn).
+    """
+    if comet_disabled(comet_model):
+        print("COMET 已禁用（--comet-model=none）。", file=sys.stderr)
+        return None, None, None
+
+    try:
+        import torch
+        from comet import download_model, load_from_checkpoint
+    except ImportError as e:
+        print(f"unbabel-comet/torch 不可用，跳过 COMET: {e}", file=sys.stderr)
+        return None, None, None
+
+    cm = str(comet_model)
+    p = Path(cm)
+    if p.exists():
+        comet_ckpt = _find_comet_ckpt(p)
+        if comet_ckpt:
+            print(f"COMET 使用本地模型: {comet_ckpt}", file=sys.stderr)
+            return comet_ckpt, torch, load_from_checkpoint
+        print(f"COMET 本地路径存在但未找到 ckpt，将跳过 COMET: {p}", file=sys.stderr)
+        return None, torch, load_from_checkpoint
+
+    # Backward-compatible shorthand: default local path
+    # models/Unbabel_wmt22-comet-da maps to remote Unbabel/wmt22-comet-da.
+    remote_name = cm
+    if cm.startswith("models/") and "/" not in Path(cm).name:
+        remote_name = Path(cm).name.replace("_", "/", 1)
+
+    save_dir = run_dir / "comet_ckpt"
+    if cm.startswith("models/") and "/" not in Path(cm).name:
+        save_dir = p
+
+    try:
+        print(f"COMET 开始预下载模型: {remote_name}", file=sys.stderr)
+        comet_ckpt = download_model(remote_name, saving_directory=str(save_dir))
+        print(f"COMET 预下载完成: {comet_ckpt}", file=sys.stderr)
+        return comet_ckpt, torch, load_from_checkpoint
+    except Exception as e:
+        print(f"COMET 模型下载失败，将跳过 COMET: {e}", file=sys.stderr)
+        return None, torch, load_from_checkpoint
+
+
 def call_translate(
     client: OpenAI,
     model: str,
@@ -302,6 +366,11 @@ def main() -> int:
     base_out = root() / eval_cfg.get("output_dir", "eval_multilingual")
     run_dir = base_out / f"{args.model_tag}_{int(time.time())}"
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    comet_ckpt, torch_mod, comet_load_from_checkpoint = prepare_comet_checkpoint(
+        str(args.comet_model),
+        run_dir,
+    )
 
     client = OpenAI(base_url=args.base_url, api_key=args.api_key)
 
@@ -431,86 +500,54 @@ def main() -> int:
 
     # COMET：只跑一次全量预测，再按 (corpus, pair) 聚合均值；无 GPU 时 gpus=0
     comet_scores_by_key: dict[str, float] = {}
-    try:
-        import torch
-        from comet import download_model, load_from_checkpoint
-    except ImportError as e:
-        print(f"unbabel-comet/torch 不可用，跳过 COMET: {e}", file=sys.stderr)
-    else:
-        if str(args.comet_model).lower() in ("none", "off", "disable", "disabled"):
-            print("COMET 已禁用（--comet-model=none）。", file=sys.stderr)
+    if comet_ckpt and torch_mod is not None and comet_load_from_checkpoint is not None:
+        gpus = 1 if torch_mod.cuda.is_available() else 0
+        comet_model = comet_load_from_checkpoint(comet_ckpt)
+
+        all_data = [
+            {"src": r["source_text"], "mt": r["hypothesis"], "ref": r["reference_text"]}
+            for r in results
+        ]
+        out_all = comet_model.predict(all_data, batch_size=args.comet_batch_size, gpus=gpus)
+        scores_all = out_all.get("scores", [])
+        if not isinstance(scores_all, list) or len(scores_all) != len(results):
+            print("COMET 输出 scores 长度异常，将跳过 COMET。", file=sys.stderr)
         else:
-            gpus = 1 if torch.cuda.is_available() else 0
-            comet_ckpt: str | None = None
-            cm = str(args.comet_model)
-            # 1) 本地路径：可以是 ckpt 文件或包含 checkpoints/model.ckpt 的目录
-            p = Path(cm)
-            if p.exists():
-                if p.is_dir():
-                    cand = p / "checkpoints" / "model.ckpt"
-                    if cand.is_file():
-                        comet_ckpt = str(cand)
-                    else:
-                        # 兼容直接给出解压后的 ckpt 文件
-                        ckpts = list(p.glob("**/*.ckpt"))
-                        if ckpts:
-                            comet_ckpt = str(ckpts[0])
-                else:
-                    comet_ckpt = str(p)
-            else:
-                # 2) 远程模型名：尽力下载；若不可访问 HuggingFace 则跳过
+            # 写 overall
+            metrics["overall"]["comet"] = float(sum(scores_all) / max(1, len(scores_all)))
+
+            # 聚合：按 key 统计 sum / count
+            sums: dict[str, float] = defaultdict(float)
+            cnts: dict[str, int] = defaultdict(int)
+            sums_corpus: dict[str, float] = defaultdict(float)
+            cnts_corpus: dict[str, int] = defaultdict(int)
+
+            for r, s in zip(results, scores_all, strict=True):
+                corp = str(r.get("eval_corpus", "?"))
+                pair = str(r.get("eval_pair") or (r["src_lang"] + "->" + r["tgt_lang"]))
+                k = f"{corp}|{pair}"
                 try:
-                    comet_ckpt = download_model(cm, saving_directory=str(run_dir / "comet_ckpt"))
-                except Exception as e:
-                    print(f"COMET 模型下载失败，将跳过 COMET: {e}", file=sys.stderr)
+                    sv = float(s)
+                except Exception:
+                    continue
+                sums[k] += sv
+                cnts[k] += 1
+                sums_corpus[corp] += sv
+                cnts_corpus[corp] += 1
 
-        if comet_ckpt:
-            comet_model = load_from_checkpoint(comet_ckpt)
+            for k, total in sums.items():
+                comet_scores_by_key[k] = float(total / max(1, cnts[k]))
+                corp, pair = k.split("|", 1)
+                if corp not in metrics["by_corpus"]:
+                    metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
+                if pair not in metrics["by_corpus"][corp]["by_pair"]:
+                    metrics["by_corpus"][corp]["by_pair"][pair] = {}
+                metrics["by_corpus"][corp]["by_pair"][pair]["comet"] = comet_scores_by_key[k]
 
-            all_data = [
-                {"src": r["source_text"], "mt": r["hypothesis"], "ref": r["reference_text"]}
-                for r in results
-            ]
-            out_all = comet_model.predict(all_data, batch_size=args.comet_batch_size, gpus=gpus)
-            scores_all = out_all.get("scores", [])
-            if not isinstance(scores_all, list) or len(scores_all) != len(results):
-                print("COMET 输出 scores 长度异常，将跳过 COMET。", file=sys.stderr)
-            else:
-                # 写 overall
-                metrics["overall"]["comet"] = float(sum(scores_all) / max(1, len(scores_all)))
-
-                # 聚合：按 key 统计 sum / count
-                sums: dict[str, float] = defaultdict(float)
-                cnts: dict[str, int] = defaultdict(int)
-                sums_corpus: dict[str, float] = defaultdict(float)
-                cnts_corpus: dict[str, int] = defaultdict(int)
-
-                for r, s in zip(results, scores_all, strict=True):
-                    corp = str(r.get("eval_corpus", "?"))
-                    pair = str(r.get("eval_pair") or (r["src_lang"] + "->" + r["tgt_lang"]))
-                    k = f"{corp}|{pair}"
-                    try:
-                        sv = float(s)
-                    except Exception:
-                        continue
-                    sums[k] += sv
-                    cnts[k] += 1
-                    sums_corpus[corp] += sv
-                    cnts_corpus[corp] += 1
-
-                for k, total in sums.items():
-                    comet_scores_by_key[k] = float(total / max(1, cnts[k]))
-                    corp, pair = k.split("|", 1)
-                    if corp not in metrics["by_corpus"]:
-                        metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
-                    if pair not in metrics["by_corpus"][corp]["by_pair"]:
-                        metrics["by_corpus"][corp]["by_pair"][pair] = {}
-                    metrics["by_corpus"][corp]["by_pair"][pair]["comet"] = comet_scores_by_key[k]
-
-                for corp, total in sums_corpus.items():
-                    if corp not in metrics["by_corpus"]:
-                        metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
-                    metrics["by_corpus"][corp]["overall"]["comet"] = float(total / max(1, cnts_corpus[corp]))
+            for corp, total in sums_corpus.items():
+                if corp not in metrics["by_corpus"]:
+                    metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
+                metrics["by_corpus"][corp]["overall"]["comet"] = float(total / max(1, cnts_corpus[corp]))
 
     metrics["bleu_tokenize_policy"] = str(args.bleu_tokenize)
 

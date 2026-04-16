@@ -426,7 +426,63 @@ python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py \
 
 ## COMET 与网络
 
-首次运行 COMET 会下载评测模型权重，需可访问外网；BLEU 仅本地计算。
+`scripts/run/run_eval.py` 会在开始 vLLM 翻译前先解析或下载 COMET 模型，避免生成完全部 hypothesis 后才发现 COMET 权重不可用。首次运行 COMET 需可访问外网；BLEU 仅本地计算。
+
+默认 `--comet-model models/Unbabel_wmt22-comet-da` 会优先查找本地 ckpt；若不存在，会按远程模型 `Unbabel/wmt22-comet-da` 预下载到该目录，后续评测复用本地文件。只跑 BLEU 时可显式禁用：
+
+```bash
+python scripts/run/run_eval.py --comet-model none
+```
+
+## 传统机器翻译基线：Apertium English-Spanish
+
+当前项目内已放入一个可离线运行的传统机器翻译模型：
+
+- 模型文件：`models/apertium-en-es/apertium-en-es.jar`
+- 下载来源：`https://sourceforge.net/p/apertium/svn/HEAD/tree/builds/apertium-en-es/apertium-en-es.jar?format=raw`
+- 方法说明：`https://wiki.apertium.org/wiki/Language_pair_packages`
+- 支持方向：`eng_Latn -> spa_Latn` 与 `spa_Latn -> eng_Latn`
+- 运行依赖：Java；不需要 vLLM、GPU 或神经网络推理服务
+
+该模型来自 Apertium。Apertium 是开源的 shallow-transfer rule-based machine translation
+系统，核心方法不是大模型，也不是 Transformer/NMT，而是传统 RBMT：
+
+1. 用有限状态词典和形态分析器做词形分析。
+2. 用词性标注/消歧模块选择上下文中的词法分析结果。
+3. 用双语词典做词汇迁移。
+4. 用结构迁移规则处理短语、局部语序和形态特征。
+5. 用形态生成器输出目标语言表层文本。
+
+因此它适合作为“传统方法”基线，而不是现代神经翻译或 LLM 的总体 SOTA。它的优势是离线、小、可解释、可复现；局限是覆盖语向少，长句和开放领域质量通常弱于现代神经模型。
+
+单句测试：
+
+```bash
+printf 'I like apples.\n' | java -jar models/apertium-en-es/apertium-en-es.jar apertium en-es
+printf 'Me gustan las manzanas.\n' | java -jar models/apertium-en-es/apertium-en-es.jar apertium es-en
+```
+
+使用与现有 vLLM 评估脚本相同的 BLEU/COMET 方法评估 Apertium：
+
+```bash
+conda activate lowres
+python scripts/run/run_eval_apertium.py
+```
+
+`scripts/run/run_eval_apertium.py` 会读取 `datasets/eval_manifest.json`，只保留 Apertium 支持的
+`eng_Latn <-> spa_Latn` 样本，其余语向会跳过。输出目录仍在 `evaluation_config.json` 的
+`output_dir` 下，文件格式与 `scripts/run/run_eval.py` 保持一致：
+
+- `hypotheses.jsonl`
+- `metrics.json`
+- `metrics.csv`
+- `metrics_flores.csv` / `metrics_ntrex.csv`（取决于 manifest 中实际有的语料）
+
+如只想先跑 BLEU，跳过 COMET：
+
+```bash
+python scripts/run/run_eval_apertium.py --comet-model none
+```
 
 ## HY-MT1.5 与 vLLM
 
