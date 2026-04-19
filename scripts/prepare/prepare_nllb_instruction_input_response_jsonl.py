@@ -31,55 +31,15 @@ from urllib.request import Request, urlopen
 PREVIEW_N = 50
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
+_SCRIPTS_PARENT = _SCRIPTS_DIR.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
+if str(_SCRIPTS_PARENT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_PARENT))
+from flores_lang_zh import english_translation_instruction  # noqa: E402
 
 _ALLENAI_URL = "https://storage.googleapis.com/allennlp-data-bucket/nllb/"
 _STATMT_URL = "http://data.statmt.org/cc-matrix/"
-
-# 与 flores_lang_zh.FLORES_LANG_ZH 键一致，用于英文 Instruction 行
-FLORES_LANG_EN: dict[str, str] = {
-    "eng_Latn": "English",
-    "zho_Hans": "Chinese (Simplified)",
-    "zho_Hant": "Chinese (Traditional)",
-    "spa_Latn": "Spanish",
-    "fra_Latn": "French",
-    "deu_Latn": "German",
-    "ita_Latn": "Italian",
-    "por_Latn": "Portuguese",
-    "rus_Cyrl": "Russian",
-    "ukr_Cyrl": "Ukrainian",
-    "pol_Latn": "Polish",
-    "nld_Latn": "Dutch",
-    "swe_Latn": "Swedish",
-    "dan_Latn": "Danish",
-    "nob_Latn": "Norwegian Bokmål",
-    "fin_Latn": "Finnish",
-    "ces_Latn": "Czech",
-    "ell_Grek": "Greek",
-    "heb_Hebr": "Hebrew",
-    "tur_Latn": "Turkish",
-    "arb_Arab": "Arabic",
-    "fas_Arab": "Persian",
-    "hin_Deva": "Hindi",
-    "ben_Beng": "Bengali",
-    "urd_Arab": "Urdu",
-    "ind_Latn": "Indonesian",
-    "vie_Latn": "Vietnamese",
-    "tha_Thai": "Thai",
-    "tgl_Latn": "Tagalog",
-    "kor_Hang": "Korean",
-    "zsm_Latn": "Malay",
-    "mya_Mymr": "Burmese",
-    "khm_Khmr": "Khmer",
-    "lao_Laoo": "Lao",
-    "cmn_Hans": "Mandarin Chinese (Simplified)",
-    "yue_Hant": "Cantonese",
-}
-
-
-def flores_code_to_en_name(code: str) -> str:
-    return FLORES_LANG_EN.get(code.strip(), code.strip())
 
 
 def root() -> Path:
@@ -172,9 +132,7 @@ def map_to_user_pair(
 
 
 def format_sample_block(src_t: str, tgt_t: str, user_src: str, user_tgt: str) -> str:
-    src_en = flores_code_to_en_name(user_src)
-    tgt_en = flores_code_to_en_name(user_tgt)
-    instruction = f"Translate {src_en} to {tgt_en}"
+    instruction = english_translation_instruction(user_src, user_tgt)
     return f"Instruction: {instruction}\nInput: {src_t}\nResponse: {tgt_t}"
 
 

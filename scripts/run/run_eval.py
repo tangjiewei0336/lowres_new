@@ -26,6 +26,11 @@ from typing import Any
 from openai import OpenAI
 from tqdm import tqdm
 
+_SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from flores_lang_zh import english_translation_instruction  # noqa: E402
+
 
 def root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -48,9 +53,7 @@ def read_items_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def mt_user_content(src_lang: str, tgt_lang: str, text: str) -> str:
-    return (
-        f"Translate from {src_lang} to {tgt_lang}. Output only the translation, no explanations.\n\n{text}"
-    )
+    return f"{english_translation_instruction(src_lang, tgt_lang)}\n\n{text}"
 
 
 def _tgt_lang_from_eval_pair(eval_pair: str) -> str:

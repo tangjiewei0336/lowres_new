@@ -16,7 +16,8 @@
 
 篇章级 refine 数据见 scripts/build_nllb_draft_refine_jsonl.py。
 
-instruction 使用中文语言名（如「西班牙语」「英语」）；若码表未收录则仍写 FLORES 码。
+instruction 使用英文语言名（如 "Spanish"、"Simplified Chinese"），与 eval prompt 对齐；
+若码表未收录则仍写 FLORES 码。
 """
 
 from __future__ import annotations
@@ -32,14 +33,14 @@ from urllib.request import Request, urlopen
 
 PREVIEW_N = 50
 
-# 与 prepare_ccmatrix_for_llamafactory 共用码表（见 flores_lang_zh.py）
+# 与 eval / 其它 prepare 脚本共用语言名与 instruction 模板（见 flores_lang_zh.py）
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 _SCRIPTS_PARENT = _SCRIPTS_DIR.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 if str(_SCRIPTS_PARENT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_PARENT))
-from flores_lang_zh import flores_code_to_zh_name  # noqa: E402
+from flores_lang_zh import english_translation_instruction  # noqa: E402
 
 _ALLENAI_URL = "https://storage.googleapis.com/allennlp-data-bucket/nllb/"
 _STATMT_URL = "http://data.statmt.org/cc-matrix/"
@@ -149,9 +150,7 @@ def stream_export_pair(
     out_path: Path,
     prev_path: Path,
 ) -> int:
-    src_zh = flores_code_to_zh_name(user_src)
-    tgt_zh = flores_code_to_zh_name(user_tgt)
-    instruction = f"请将以下 {src_zh} 文本翻译为 {tgt_zh}，只输出译文。"
+    instruction = english_translation_instruction(user_src, user_tgt)
     preview_lines: list[str] = []
     written = 0
 
