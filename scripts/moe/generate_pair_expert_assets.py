@@ -45,6 +45,14 @@ class Expert:
         return f"llamafactory_{self.adapter_name}.yaml"
 
 
+def expert_dataset_name(expert: Expert, dataset_prefix: str) -> str:
+    return f"{dataset_prefix}_{expert.src_lang}_to_{expert.tgt_lang}"
+
+
+def expert_file_name(expert: Expert, data_subdir: str, file_prefix: str) -> str:
+    return f"{data_subdir.rstrip('/')}/{file_prefix}_{expert.src_lang}__{expert.tgt_lang}.jsonl"
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -57,6 +65,7 @@ def q(s: str) -> str:
 def render_yaml(
     expert: Expert,
     *,
+    dataset_name: str,
     model_name_or_path: str,
     dataset_dir: str,
     output_root: str,
@@ -89,7 +98,7 @@ lora_target: all
 
 ### dataset
 dataset_dir: {q(dataset_dir)}
-dataset: {expert.dataset_name}
+dataset: {dataset_name}
 template: qwen
 cutoff_len: {cutoff_len}
 overwrite_cache: true
@@ -114,9 +123,9 @@ ddp_timeout: 180000000
 """
 
 
-def dataset_info_entry(expert: Expert) -> dict[str, object]:
+def dataset_info_entry(expert: Expert, *, dataset_subdir: str, file_prefix: str) -> dict[str, object]:
     return {
-        "file_name": expert.file_name,
+        "file_name": expert_file_name(expert, dataset_subdir, file_prefix),
         "formatting": "alpaca",
         "columns": {
             "prompt": "instruction",
@@ -168,6 +177,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--limit", type=int, default=100000)
     p.add_argument(
+        "--training-dataset-prefix",
+        default="nllb_moe",
+        help="Dataset name prefix used in generated YAML/dataset_info, e.g. nllb_moe or mixed_moe.",
+    )
+    p.add_argument(
+        "--training-data-subdir",
+        default="multilingual/nllb_moe",
+        help="Subdir under training/data containing the expert JSONL files.",
+    )
+    p.add_argument(
+        "--training-file-prefix",
+        default="nllb_mt",
+        help="JSONL filename prefix, e.g. nllb_mt or mixed_moe.",
+    )
+    p.add_argument(
         "--model-name-or-path",
         default="/root/lowres_new/models/Qwen3-8B_latest",
     )
@@ -216,7 +240,14 @@ def main() -> int:
             for e in experts
         ],
     }
-    dataset_info = {e.dataset_name: dataset_info_entry(e) for e in experts}
+    dataset_info = {
+        expert_dataset_name(e, args.training_dataset_prefix): dataset_info_entry(
+            e,
+            dataset_subdir=args.training_data_subdir,
+            file_prefix=args.training_file_prefix,
+        )
+        for e in experts
+    }
     router_manifest = {
         "description": "Route each language pair to its dedicated LoRA expert adapter.",
         "base_model": args.model_name_or_path,
@@ -225,7 +256,7 @@ def main() -> int:
             {
                 "src_lang": e.src_lang,
                 "tgt_lang": e.tgt_lang,
-                "dataset": e.dataset_name,
+                "dataset": expert_dataset_name(e, args.training_dataset_prefix),
                 "adapter_name": e.adapter_name,
                 "adapter_path": f"{args.output_root.rstrip('/')}/{e.adapter_name}",
             }
@@ -241,6 +272,7 @@ def main() -> int:
     for e in experts:
         cfg = render_yaml(
             e,
+            dataset_name=expert_dataset_name(e, args.training_dataset_prefix),
             model_name_or_path=args.model_name_or_path,
             dataset_dir=args.dataset_dir,
             output_root=args.output_root,

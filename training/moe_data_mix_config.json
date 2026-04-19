@@ -1,0 +1,43 @@
+{
+  "_comment": "Per-direction data mix for pair-level LoRA MoE. Dictionary is reserved with limit 0 by default.",
+  "default_seed": 42,
+  "default_sources": {
+    "nllb": {
+      "enabled": true,
+      "limit": 100000,
+      "path_template": "multilingual/nllb_moe/nllb_mt_{src}__{tgt}.jsonl"
+    },
+    "fineweb_synth": {
+      "enabled": true,
+      "limit": 100000,
+      "path_template": "multilingual/fineweb2_synth/fineweb_synth_{src}__{tgt}.jsonl"
+    },
+    "dictionary": {
+      "enabled": false,
+      "limit": 0,
+      "path_template": "multilingual/dictionary_moe/dict_mt_{src}__{tgt}.jsonl"
+    }
+  },
+  "pairs": [
+    {"src_lang": "spa_Latn", "tgt_lang": "zho_Hans"},
+    {"src_lang": "zho_Hans", "tgt_lang": "spa_Latn"},
+    {"src_lang": "spa_Latn", "tgt_lang": "eng_Latn"},
+    {"src_lang": "eng_Latn", "tgt_lang": "spa_Latn"},
+    {"src_lang": "ind_Latn", "tgt_lang": "zho_Hans"},
+    {"src_lang": "zho_Hans", "tgt_lang": "ind_Latn"},
+    {"src_lang": "ind_Latn", "tgt_lang": "eng_Latn"},
+    {"src_lang": "eng_Latn", "tgt_lang": "ind_Latn"},
+    {"src_lang": "vie_Latn", "tgt_lang": "zho_Hans"},
+    {"src_lang": "zho_Hans", "tgt_lang": "vie_Latn"},
+    {"src_lang": "vie_Latn", "tgt_lang": "eng_Latn"},
+    {"src_lang": "eng_Latn", "tgt_lang": "vie_Latn"},
+    {"src_lang": "tha_Thai", "tgt_lang": "zho_Hans"},
+    {"src_lang": "zho_Hans", "tgt_lang": "tha_Thai"},
+    {"src_lang": "tha_Thai", "tgt_lang": "eng_Latn"},
+    {"src_lang": "eng_Latn", "tgt_lang": "tha_Thai"},
+    {"src_lang": "tgl_Latn", "tgt_lang": "zho_Hans"},
+    {"src_lang": "zho_Hans", "tgt_lang": "tgl_Latn"},
+    {"src_lang": "tgl_Latn", "tgt_lang": "eng_Latn"},
+    {"src_lang": "eng_Latn", "tgt_lang": "tgl_Latn"}
+  ]
+}

@@ -52,6 +52,39 @@ python scripts/prepare/prepare_nllb_for_llamafactory.py \
   --out-subdir multilingual/nllb_moe
 ```
 
+If FineWeb synthetic data is available, build the sentence-level mixed MoE data:
+
+```bash
+python scripts/moe/build_mixed_moe_for_llamafactory.py
+```
+
+The mix is controlled by:
+
+```text
+training/moe_data_mix_config.json
+```
+
+Default sources are:
+
+- `nllb`: enabled, up to `100000` rows per direction.
+- `fineweb_synth`: enabled, up to `100000` rows per direction.
+- `dictionary`: reserved but disabled with `limit=0`.
+
+The mixed files are written to:
+
+```text
+training/data/multilingual/mixed_moe/mixed_moe_<src>__<tgt>.jsonl
+```
+
+To train on mixed data instead of pure NLLB, regenerate expert assets with:
+
+```bash
+python scripts/moe/generate_pair_expert_assets.py \
+  --training-dataset-prefix mixed_moe \
+  --training-data-subdir multilingual/mixed_moe \
+  --training-file-prefix mixed_moe
+```
+
 The generator creates or updates `training/data/dataset_info.json`. The
 separate `training/moe_dataset_info.snippet.json` is kept for copying the same
 registrations to another LLaMA-Factory checkout if needed.
