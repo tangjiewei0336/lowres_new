@@ -556,6 +556,31 @@ python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py \
 python scripts/download_models_to_models_dir.py --only comet_wmt22_da
 ```
 
+FLORES/spBLEU 第一次运行可能会触发 sacrebleu 下载 `flores200_sacrebleu_tokenizer_spm.model`。如果离线机器证书或 tinyurl 访问有问题，建议在能联网的机器上准备评测资产：
+
+```bash
+python scripts/download_eval_assets.py --bundle eval_assets.tar.gz
+```
+
+把 `eval_assets.tar.gz` 拷到离线机器仓库根目录后解压：
+
+```bash
+tar -xzf eval_assets.tar.gz
+```
+
+解压后应有：
+
+```text
+models/Unbabel_wmt22-comet-da/
+models/sacrebleu/flores200_sacrebleu_tokenizer_spm.model
+```
+
+`scripts/run/run_eval.py` 会自动优先使用这个本地 SPM 文件；也可显式指定：
+
+```bash
+python scripts/run/run_eval.py --flores200-spm-model models/sacrebleu/flores200_sacrebleu_tokenizer_spm.model
+```
+
 只跑 BLEU 时可显式禁用：
 
 ```bash

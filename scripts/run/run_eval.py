@@ -77,6 +77,7 @@ def _tgt_lang_from_eval_pair(eval_pair: str) -> str:
 
 # 泰语 BLEU：sacrebleu 无内置 PyThai 分词器；先词级切分再 tokenize=none（与 PyThaiNLP 评测实践一致）
 _THAI_SACREbleu_TOK = "pythai_newmm"
+_FLORES200_SPM_FILENAME = "flores200_sacrebleu_tokenizer_spm.model"
 
 
 def _segment_thai_pythai_words(texts: list[str], *, engine: str = "newmm") -> list[str]:
@@ -120,18 +121,49 @@ def sacrebleu_tokenize_for_group(eval_corpus: str, eval_pair: str, policy: str) 
     return sacrebleu_tokenize_heuristic_tgt(eval_pair)
 
 
-def _corpus_bleu_score(hyps: list[str], refs: list[str], tokenize: str) -> float:
+def default_flores200_spm_path() -> Path:
+    return root() / "models" / "sacrebleu" / _FLORES200_SPM_FILENAME
+
+
+def _segment_flores200_spm(texts: list[str], spm_model: Path) -> list[str]:
+    try:
+        import sentencepiece as spm
+    except ImportError as e:
+        raise RuntimeError("本地 flores200 SPM 需要 sentencepiece：pip install sentencepiece") from e
+    proc = spm.SentencePieceProcessor()
+    proc.Load(str(spm_model))
+    return [" ".join(proc.EncodeAsPieces((s or "").strip())) for s in texts]
+
+
+def _corpus_bleu_score(
+    hyps: list[str],
+    refs: list[str],
+    tokenize: str,
+    *,
+    flores200_spm_model: Path | None = None,
+) -> float:
     import sacrebleu
 
     if tokenize == _THAI_SACREbleu_TOK:
         hyps_t = _segment_thai_pythai_words(hyps)
         refs_t = _segment_thai_pythai_words(refs)
         return float(sacrebleu.corpus_bleu(hyps_t, [refs_t], tokenize="none").score)
+    if tokenize == "flores200" and flores200_spm_model and flores200_spm_model.is_file():
+        hyps_t = _segment_flores200_spm(hyps, flores200_spm_model)
+        refs_t = _segment_flores200_spm(refs, flores200_spm_model)
+        return float(sacrebleu.corpus_bleu(hyps_t, [refs_t], tokenize="none").score)
     return float(sacrebleu.corpus_bleu(hyps, [refs], tokenize=tokenize).score)
 
 
-def _segment_with_sacrebleu_tokenizer(texts: list[str], tokenize: str) -> list[str]:
+def _segment_with_sacrebleu_tokenizer(
+    texts: list[str],
+    tokenize: str,
+    *,
+    flores200_spm_model: Path | None = None,
+) -> list[str]:
     """将 sacrebleu 的 tokenize 结果（空格分隔）输出，便于人工排查。"""
+    if tokenize == "flores200" and flores200_spm_model and flores200_spm_model.is_file():
+        return _segment_flores200_spm(texts, flores200_spm_model)
     import sacrebleu
 
     # BLEU(tokenize=...) 的 tokenizer 会把输入转成以空格分隔的“token串”
@@ -146,11 +178,14 @@ def corpus_bleu_with_fallbacks(
     eval_corpus: str,
     eval_pair: str,
     policy: str,
+    flores200_spm_model: Path | None = None,
 ) -> tuple[float, str]:
     """返回 (bleu, 实际使用的 sacrebleu tokenize 名，可能带 fallback 标记)。"""
     tok = sacrebleu_tokenize_for_group(eval_corpus, eval_pair, policy)
     try:
-        return _corpus_bleu_score(hyps, refs, tok), tok
+        bleu = _corpus_bleu_score(hyps, refs, tok, flores200_spm_model=flores200_spm_model)
+        tok_name = "flores200_local_spm" if tok == "flores200" and flores200_spm_model and flores200_spm_model.is_file() else tok
+        return bleu, tok_name
     except Exception as e:
         if tok == "ja-mecab":
             print(
@@ -370,8 +405,20 @@ def main() -> int:
         choices=("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"),
         help="OpenAI/httpx/httpcore 日志级别。默认 WARNING，只保留进度条和关键警告。",
     )
+    parser.add_argument(
+        "--flores200-spm-model",
+        type=Path,
+        default=Path(os.environ.get("FLORES200_SPM_MODEL", str(default_flores200_spm_path()))),
+        help=(
+            "本地 FLORES200/spBLEU SentencePiece 模型路径。默认 models/sacrebleu/"
+            f"{_FLORES200_SPM_FILENAME}；存在时不会触发 sacrebleu 的 tinyurl 下载。"
+        ),
+    )
     args = parser.parse_args()
     quiet_http_logging(str(args.http_log_level))
+    flores200_spm_model = args.flores200_spm_model if args.flores200_spm_model.is_file() else None
+    if flores200_spm_model:
+        print(f"BLEU: 使用本地 FLORES200 SPM: {flores200_spm_model}", file=sys.stderr)
 
     eval_cfg = load_json(args.eval_config)
     manifest = load_json(args.manifest)
@@ -427,9 +474,21 @@ def main() -> int:
             elif tok in ("zh", "flores200"):
                 # 中文：zh 分词；FLORES 默认 flores200（spBLEU）也常用于中文
                 try:
-                    out["hypothesis_segmented"] = _segment_with_sacrebleu_tokenizer([hyp], tok)[0]
-                    out["reference_segmented"] = _segment_with_sacrebleu_tokenizer([ref], tok)[0]
-                    out["segmentation_tokenizer"] = tok
+                    out["hypothesis_segmented"] = _segment_with_sacrebleu_tokenizer(
+                        [hyp],
+                        tok,
+                        flores200_spm_model=flores200_spm_model,
+                    )[0]
+                    out["reference_segmented"] = _segment_with_sacrebleu_tokenizer(
+                        [ref],
+                        tok,
+                        flores200_spm_model=flores200_spm_model,
+                    )[0]
+                    out["segmentation_tokenizer"] = (
+                        "flores200_local_spm"
+                        if tok == "flores200" and flores200_spm_model
+                        else tok
+                    )
                 except Exception as e:
                     # dump 不影响主流程
                     out["segmentation_tokenizer"] = f"{tok}_dump_failed"
@@ -483,7 +542,12 @@ def main() -> int:
         refs = [t[1] for t in triples]
         corp, pair = key.split("|", 1)
         bleu_score, bleu_tok = corpus_bleu_with_fallbacks(
-            hyps, refs, corp, pair, str(args.bleu_tokenize)
+            hyps,
+            refs,
+            corp,
+            pair,
+            str(args.bleu_tokenize),
+            flores200_spm_model=flores200_spm_model,
         )
         if corp not in metrics["by_corpus"]:
             metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}

@@ -5,7 +5,7 @@
 
 默认处理 modelscope_sources.json 中的 smollm3_3b、hunyuan_mt1_5_1_8b、qwen3_4b、qwen3_8b、qwen3_8b_base、qwen3_4b_instruct_2507、qwen3_5_27b、qwen3_5_27b_instruct
 （Qwen3-8B Base Hub: https://huggingface.co/Qwen/Qwen3-8B-Base ；Instruct 对应 Hub: https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507 ；Qwen3.5-27B Hub: https://huggingface.co/Qwen/Qwen3.5-27B ）。
-另会处理 comet_models 中的 comet_wmt22_da，下载到 models/Unbabel_wmt22-comet-da，
+另会处理 comet_models 中的 comet_wmt22_da，使用 huggingface_hub 下载到 models/Unbabel_wmt22-comet-da，
 与 scripts/run/run_eval.py 的默认 --comet-model 路径一致。
 用法:
   conda activate lowres
@@ -63,10 +63,10 @@ def main() -> int:
 
     if args.dry_run:
         snapshot_download = None
-        comet_download_model = None
+        hf_snapshot_download = None
     else:
         from modelscope import snapshot_download
-        from comet import download_model as comet_download_model
+        from huggingface_hub import snapshot_download as hf_snapshot_download
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     models_root = root() / "models"
@@ -105,8 +105,12 @@ def main() -> int:
             if args.dry_run:
                 continue
             dest.mkdir(parents=True, exist_ok=True)
-            assert comet_download_model is not None
-            path = comet_download_model(mid, saving_directory=str(dest))
+            assert hf_snapshot_download is not None
+            path = hf_snapshot_download(
+                repo_id=mid,
+                local_dir=str(dest),
+                local_dir_use_symlinks=False,
+            )
             print(f"  完成: {path}")
             continue
 
