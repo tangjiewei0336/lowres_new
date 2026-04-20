@@ -24,9 +24,9 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-EMPTY}"
 # export EVAL_MODEL_FAMILY=qwen3
 
 # --- Qwen3-8B（先 download_models_to_models_dir.py --only qwen3_8b，再 scripts/serve/run.sh qwen3-8b）---
-export SERVED_MODEL_NAME=qwen3-8b
-export EVAL_MODEL_TAG=baseline_qwen3_8b
-export EVAL_MODEL_FAMILY=qwen3
+export SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-qwen3-8b}"
+export EVAL_MODEL_TAG="${EVAL_MODEL_TAG:-baseline_qwen3_8b}"
+export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-qwen3}"
 
 # --- Qwen3.5-27B-Instruct alias（先 download_models_to_models_dir.py --only qwen3_5_27b_instruct，再 scripts/serve/run.sh qwen3.5-27b-instruct）---
 # export SERVED_MODEL_NAME=qwen3.5-27b-instruct

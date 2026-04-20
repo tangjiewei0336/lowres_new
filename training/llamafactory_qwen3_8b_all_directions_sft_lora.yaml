@@ -1,0 +1,51 @@
+# Qwen3-8B + all directions SFT (single LoRA, non-MoE baseline)
+#
+# Data:
+#   python scripts/moe/build_single_sft_for_llamafactory.py --strict
+#
+# Run on GPU machine:
+#   conda activate lowres
+#   CUDA_VISIBLE_DEVICES=0,1,2,3 llamafactory-cli train /root/lowres_new/training/llamafactory_qwen3_8b_all_directions_sft_lora.yaml
+
+### model
+model_name_or_path: /root/lowres_new/models/Qwen3-8B_latest
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_target: all
+
+### dataset
+dataset_dir: /root/lowres_new/training/data
+dataset: qwen3_8b_all_directions_sft
+template: qwen
+cutoff_len: 512
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: /root/lowres_new/models/Qwen3-8B_all_directions_sft_lora
+logging_steps: 20
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_train_epochs: 1
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+optim: adamw_torch
+gradient_checkpointing: true
+bf16: true
+ddp_timeout: 180000000
+
+### eval (optional)
+# val_size: 0.01
+# eval_strategy: steps
+# eval_steps: 500

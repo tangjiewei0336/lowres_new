@@ -114,6 +114,40 @@ python scripts/moe/generate_pair_expert_assets.py \
   --output-root /path/to/models/Qwen3-8B_moe_pair_experts
 ```
 
+## Single SFT Baseline
+
+To compare pair-level MoE against one ordinary LoRA adapter, merge all
+directions into a single SFT dataset:
+
+```bash
+python scripts/moe/build_single_sft_for_llamafactory.py --strict
+```
+
+This reuses `training/moe_data_mix_config.json`, so the non-MoE baseline sees
+the same NLLB/FineWeb source limits as the MoE mixed data path. Dictionary data
+is still reserved but disabled by default.
+
+Train the single adapter:
+
+```bash
+bash scripts/run/run_train_single_sft.sh
+```
+
+Serve it with vLLM:
+
+```bash
+bash scripts/serve/serve_vllm_qwen3_8b_single_sft_lora.sh
+```
+
+Then evaluate using the same FLORES/COMET pipeline with:
+
+```bash
+export SERVED_MODEL_NAME=qwen3_8b_all_directions_sft
+export EVAL_MODEL_TAG=qwen3_8b_single_sft
+export EVAL_MODEL_FAMILY=qwen3
+bash scripts/run/run_eval_baseline.sh
+```
+
 ## Inference Routing
 
 Serve the base model with all LoRA adapters enabled, then route each request by

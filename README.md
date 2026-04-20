@@ -329,6 +329,49 @@ python scripts/moe/generate_pair_expert_assets.py \
   --training-file-prefix mixed_moe
 ```
 
+#### single_sft 非 MoE 对照
+
+为了和 pair-level LoRA MoE 对比，可以把所有方向的数据合并成一个普通 SFT 数据集，训练单个 LoRA adapter：
+
+```bash
+python scripts/moe/build_single_sft_for_llamafactory.py --strict
+```
+
+该脚本复用 `training/moe_data_mix_config.json`，所以每个方向、每个来源的数据量与 `mixed_moe` 保持一致。默认输出：
+
+```text
+training/data/multilingual/single_sft/qwen3_8b_all_directions_sft.jsonl
+training/data/multilingual/single_sft/previews/qwen3_8b_all_directions_sft.preview_50.jsonl
+training/qwen3_8b_all_directions_sft_dataset_info.snippet.json
+```
+
+训练单 LoRA：
+
+```bash
+bash scripts/run/run_train_single_sft.sh
+```
+
+等价于：
+
+```bash
+llamafactory-cli train /root/lowres_new/training/llamafactory_qwen3_8b_all_directions_sft_lora.yaml
+```
+
+部署这个普通 SFT adapter：
+
+```bash
+bash scripts/serve/serve_vllm_qwen3_8b_single_sft_lora.sh
+```
+
+然后把 `SERVED_MODEL_NAME` 设为 adapter 名跑同一套 FLORES/COMET：
+
+```bash
+export SERVED_MODEL_NAME=qwen3_8b_all_directions_sft
+export EVAL_MODEL_TAG=qwen3_8b_single_sft
+export EVAL_MODEL_FAMILY=qwen3
+bash scripts/run/run_eval_baseline.sh
+```
+
 #### LoRA MoE 部署与调用
 
 训练完成后，每个方向会得到一个 LoRA adapter。推荐用 vLLM 同时加载 Qwen3-8B base 与全部 pair expert adapter：
@@ -504,6 +547,120 @@ python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py \
 
 ```bash
 python scripts/run/run_eval.py --comet-model none
+```
+
+## NLLB-200 3.3B 多语基线
+
+`facebook/nllb-200-3.3B` 是 Meta 发布的 NLLB-200 多语神经机器翻译模型，Hugging Face 页面：
+`https://huggingface.co/facebook/nllb-200-3.3B`。它覆盖 NLLB/FLORES 语言代码体系，适合当前
+`evaluation_config.json` 中的 `eng_Latn`、`zho_Hans`、`spa_Latn`、`ind_Latn`、`vie_Latn`、
+`tha_Thai`、`tgl_Latn` 多方向评估。
+
+它不是传统规则/统计机器翻译模型，而是 encoder-decoder 神经 MT 模型；这里把它作为“覆盖更多语言对”的强多语基线。运行不需要 vLLM，但需要 `transformers`、`huggingface_hub`、`sentencepiece`、`torch`。
+
+下载到项目 `models/`：
+
+```bash
+conda activate lowres
+python scripts/download_hf_nllb_200_3_3b.py
+```
+
+默认目标目录：
+
+```text
+models/facebook_nllb-200-3.3B
+```
+
+如只想检查路径，不实际下载：
+
+```bash
+python scripts/download_hf_nllb_200_3_3b.py --dry-run
+```
+
+在现有 FLORES/NTREX manifest 上评估，并输出与 `scripts/run/run_eval.py` 同格式的
+`hypotheses.jsonl`、`metrics.json`、`metrics.csv`：
+
+```bash
+conda activate lowres
+python scripts/run/run_eval_nllb.py
+```
+
+只跑 BLEU，跳过 COMET：
+
+```bash
+python scripts/run/run_eval_nllb.py --comet-model none
+```
+
+常用资源参数：
+
+```bash
+python scripts/run/run_eval_nllb.py \
+  --batch-size 8 \
+  --num-beams 4 \
+  --device cuda \
+  --dtype fp16
+```
+
+如果没有先下载，也可以直接从 Hugging Face repo id 加载；Transformers 会使用本地 HF cache：
+
+```bash
+python scripts/run/run_eval_nllb.py \
+  --model-name-or-path facebook/nllb-200-3.3B
+```
+
+评估前仍需先生成项目的评估数据：
+
+```bash
+python scripts/prepare/prepare_datasets.py
+python scripts/expand_language_pairs.py
+```
+
+## NLLB-MoE 54B 多语基线
+
+`facebook/nllb-moe-54b` 是 NLLB 的 Mixture-of-Experts 版本，Hugging Face 页面：
+`https://huggingface.co/facebook/nllb-moe-54b`。模型卡标注为 FLORES-200 / 196 languages，
+生成时同样需要把 `forced_bos_token_id` 设成目标语言 id；`scripts/run/run_eval_nllb.py`
+已经按每条样本的 `tgt_lang` 自动设置。
+
+注意资源：模型卡说明 checkpoint 约需 350GB 存储，内存不足时需要使用 `accelerate`。建议只在有足够磁盘、内存和 GPU/CPU offload 资源的机器上运行。
+
+下载到项目 `models/`：
+
+```bash
+conda activate lowres
+python scripts/download_hf_nllb_moe_54b.py
+```
+
+默认目标目录：
+
+```text
+models/facebook_nllb-moe-54b
+```
+
+如只想检查路径，不实际下载：
+
+```bash
+python scripts/download_hf_nllb_moe_54b.py --dry-run
+```
+
+评估 NLLB-MoE 54B 使用同一个 NLLB 评估脚本。推荐从小 batch 和 BLEU-only 开始：
+
+```bash
+python scripts/run/run_eval_nllb.py \
+  --model-name-or-path models/facebook_nllb-moe-54b \
+  --model-tag nllb_moe_54b \
+  --batch-size 1 \
+  --num-beams 4 \
+  --dtype fp16 \
+  --device-map auto \
+  --comet-model none
+```
+
+如要启用 COMET，去掉 `--comet-model none`；输出格式仍与 `scripts/run/run_eval.py` 一致。
+`--device-map auto` 会启用 Transformers/Accelerate 的自动切分；磁盘 offload 默认写到：
+
+```text
+models/offload/nllb_moe_54b
 ```
 
 ## 传统机器翻译基线：Apertium English-Spanish
