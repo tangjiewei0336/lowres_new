@@ -310,8 +310,10 @@ training/moe_data_mix_config.json
 默认数据源：
 
 - `nllb`：启用，每方向最多 `100000` 条，读取 `training/data/multilingual/nllb_moe/nllb_mt_<src>__<tgt>.jsonl`。
-- `fineweb_synth`：默认不启用；只在 `pairs[].sources.fineweb_synth.enabled=true` 的方向启用，每方向最多 `100000` 条，读取 `training/data/multilingual/fineweb2_synth/fineweb_synth_<src>__<tgt>.jsonl`。当前配置只打开 `tha_Thai<->zho_Hans` 与 `tha_Thai<->eng_Latn`。
+- `fineweb_synth`：启用但不要求存在，每方向最多 `100000` 条，读取 `training/data/multilingual/fineweb2_synth/fineweb_synth_<src>__<tgt>.jsonl`。某个方向没有该文件时记为 `0` 条并跳过；有文件时自动混入。
 - `dictionary`：预留，默认 `enabled=false` 且 `limit=0`。
+
+`enabled=true` 表示会检查这个来源；`required=true` 才会在 `--strict` 下因为缺文件而失败。当前 `nllb.required=true`，`fineweb_synth.required=false`，所以不同语言对可以来自不同数据源。
 
 生成 mixed 数据：
 
@@ -572,14 +574,19 @@ tar -xzf eval_assets.tar.gz
 
 ```text
 models/Unbabel_wmt22-comet-da/
+models/xlm-roberta-large/
 models/sacrebleu/flores200_sacrebleu_tokenizer_spm.model
 ```
 
-`scripts/run/run_eval.py` 会自动优先使用这个本地 SPM 文件；也可显式指定：
+`scripts/run/run_eval.py` 会自动优先使用这个本地 SPM 文件，也会在本地 `models/xlm-roberta-large/` 存在时把 COMET 的 `pretrained_model` 指向该目录，避免加载 COMET 时再访问 Hugging Face。也可显式指定：
 
 ```bash
-python scripts/run/run_eval.py --flores200-spm-model models/sacrebleu/flores200_sacrebleu_tokenizer_spm.model
+python scripts/run/run_eval.py \
+  --flores200-spm-model models/sacrebleu/flores200_sacrebleu_tokenizer_spm.model \
+  --comet-encoder-model models/xlm-roberta-large
 ```
+
+如果看到 Lightning 自动升级 checkpoint 的提示，它通常只是 PyTorch Lightning 版本迁移提示，不是网络报错原因；真正需要离线准备的是 COMET 权重、`xlm-roberta-large` encoder 和 FLORES200 SPM。
 
 只跑 BLEU 时可显式禁用：
 

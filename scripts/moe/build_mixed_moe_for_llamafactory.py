@@ -124,11 +124,13 @@ def build_one_pair(
         if not isinstance(template, str) or not template:
             raise SystemExit(f"Source {source_name} has no path_template")
         path = source_path(data_root, template, src, tgt)
+        required = bool(cfg.get("required", False))
         if not path.is_file():
             msg = f"missing {source_name} input for {src}->{tgt}: {path}"
-            if strict:
+            if strict and required:
                 raise SystemExit(msg)
-            print(f"warn: {msg}", file=sys.stderr)
+            if required:
+                print(f"warn: {msg}", file=sys.stderr)
             counts[source_name] = 0
             continue
         lines = read_jsonl_lines(path, skip_bad_lines=skip_bad_lines)

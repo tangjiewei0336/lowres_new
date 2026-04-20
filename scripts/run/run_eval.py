@@ -17,6 +17,7 @@ import csv
 import json
 import logging
 import os
+import re
 import sys
 import time
 from collections import defaultdict
@@ -247,7 +248,41 @@ def _find_comet_ckpt(path: Path) -> str | None:
     return None
 
 
-def prepare_comet_checkpoint(comet_model: str, run_dir: Path) -> tuple[str | None, Any | None, Any | None]:
+def patch_comet_hparams_pretrained_model(comet_ckpt: str, encoder_path: Path | None) -> None:
+    if not encoder_path or not encoder_path.is_dir():
+        return
+    ckpt_path = Path(comet_ckpt)
+    candidates = [
+        ckpt_path.parent.parent / "hparams.yaml",
+        ckpt_path.parent / "hparams.yaml",
+    ]
+    hparams = next((p for p in candidates if p.is_file()), None)
+    if not hparams:
+        return
+    text = hparams.read_text(encoding="utf-8")
+    replacement = f"pretrained_model: {encoder_path.resolve()}"
+    if re.search(r"^pretrained_model:\s*.+$", text, flags=re.MULTILINE):
+        new_text = re.sub(r"^pretrained_model:\s*.+$", replacement, text, flags=re.MULTILINE)
+    else:
+        new_text = text.rstrip() + "\n" + replacement + "\n"
+    if new_text != text:
+        hparams.write_text(new_text, encoding="utf-8")
+        print(f"COMET: patched {hparams} pretrained_model -> {encoder_path.resolve()}", file=sys.stderr)
+
+
+def load_comet_model(load_from_checkpoint: Any, comet_ckpt: str) -> Any:
+    try:
+        return load_from_checkpoint(comet_ckpt, reload_params=True)
+    except TypeError:
+        return load_from_checkpoint(comet_ckpt)
+
+
+def prepare_comet_checkpoint(
+    comet_model: str,
+    run_dir: Path,
+    *,
+    encoder_path: Path | None = None,
+) -> tuple[str | None, Any | None, Any | None]:
     """
     Import and download/resolve COMET before translation starts.
 
@@ -270,6 +305,7 @@ def prepare_comet_checkpoint(comet_model: str, run_dir: Path) -> tuple[str | Non
     if p.exists():
         comet_ckpt = _find_comet_ckpt(p)
         if comet_ckpt:
+            patch_comet_hparams_pretrained_model(comet_ckpt, encoder_path)
             print(f"COMET 使用本地模型: {comet_ckpt}", file=sys.stderr)
             return comet_ckpt, torch, load_from_checkpoint
         print(f"COMET 本地路径存在但未找到 ckpt，将跳过 COMET: {p}", file=sys.stderr)
@@ -288,6 +324,7 @@ def prepare_comet_checkpoint(comet_model: str, run_dir: Path) -> tuple[str | Non
     try:
         print(f"COMET 开始预下载模型: {remote_name}", file=sys.stderr)
         comet_ckpt = download_model(remote_name, saving_directory=str(save_dir))
+        patch_comet_hparams_pretrained_model(comet_ckpt, encoder_path)
         print(f"COMET 预下载完成: {comet_ckpt}", file=sys.stderr)
         return comet_ckpt, torch, load_from_checkpoint
     except Exception as e:
@@ -414,6 +451,15 @@ def main() -> int:
             f"{_FLORES200_SPM_FILENAME}；存在时不会触发 sacrebleu 的 tinyurl 下载。"
         ),
     )
+    parser.add_argument(
+        "--comet-encoder-model",
+        type=Path,
+        default=Path(os.environ.get("COMET_ENCODER_MODEL", str(root() / "models" / "xlm-roberta-large"))),
+        help=(
+            "COMET encoder 本地路径，默认 models/xlm-roberta-large。存在时会把 COMET "
+            "hparams.yaml 的 pretrained_model 指向该目录，避免离线加载时访问 Hugging Face。"
+        ),
+    )
     args = parser.parse_args()
     quiet_http_logging(str(args.http_log_level))
     flores200_spm_model = args.flores200_spm_model if args.flores200_spm_model.is_file() else None
@@ -441,6 +487,7 @@ def main() -> int:
     comet_ckpt, torch_mod, comet_load_from_checkpoint = prepare_comet_checkpoint(
         str(args.comet_model),
         run_dir,
+        encoder_path=args.comet_encoder_model,
     )
 
     client = OpenAI(base_url=args.base_url, api_key=args.api_key)
@@ -590,7 +637,7 @@ def main() -> int:
     comet_scores_by_key: dict[str, float] = {}
     if comet_ckpt and torch_mod is not None and comet_load_from_checkpoint is not None:
         gpus = 1 if torch_mod.cuda.is_available() else 0
-        comet_model = comet_load_from_checkpoint(comet_ckpt)
+        comet_model = load_comet_model(comet_load_from_checkpoint, comet_ckpt)
 
         all_data = [
             {"src": r["source_text"], "mt": r["hypothesis"], "ref": r["reference_text"]}

@@ -67,10 +67,15 @@ training/moe_data_mix_config.json
 Default sources are:
 
 - `nllb`: enabled, up to `100000` rows per direction.
-- `fineweb_synth`: disabled by default, enabled only for directions with
-  `pairs[].sources.fineweb_synth.enabled=true`. The current config enables
-  `tha_Thai<->zho_Hans` and `tha_Thai<->eng_Latn`.
+- `fineweb_synth`: enabled but optional, up to `100000` rows per direction.
+  If a direction has no FineWeb synthetic file, it contributes `0` rows and is
+  skipped without failing.
 - `dictionary`: reserved but disabled with `limit=0`.
+
+`enabled=true` means the builder checks a source. `required=true` means
+`--strict` fails if that source file is missing. Currently `nllb` is required,
+while `fineweb_synth` is optional, so different language pairs can use different
+available sources.
 
 The mixed files are written to:
 
