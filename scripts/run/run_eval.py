@@ -20,6 +20,7 @@ import os
 import re
 import sys
 import time
+import tempfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -270,6 +271,42 @@ def patch_comet_hparams_pretrained_model(comet_ckpt: str, encoder_path: Path | N
         print(f"COMET: patched {hparams} pretrained_model -> {encoder_path.resolve()}", file=sys.stderr)
 
 
+def patch_comet_checkpoint_pretrained_model(comet_ckpt: str, encoder_path: Path | None) -> str:
+    if not encoder_path or not encoder_path.is_dir():
+        return comet_ckpt
+    try:
+        import torch
+    except Exception:
+        return comet_ckpt
+
+    ckpt_path = Path(comet_ckpt)
+    try:
+        ckpt = torch.load(ckpt_path, map_location="cpu")
+    except Exception as e:
+        print(f"COMET: 无法读取 checkpoint 以 patch encoder，本次仅使用 hparams.yaml: {e}", file=sys.stderr)
+        return comet_ckpt
+
+    target = str(encoder_path.resolve())
+    changed = False
+    hyper = ckpt.get("hyper_parameters") if isinstance(ckpt, dict) else None
+    if isinstance(hyper, dict):
+        for key in ("pretrained_model", "encoder_model", "model_name", "model_name_or_path"):
+            if key in hyper and isinstance(hyper[key], str) and hyper[key] != target:
+                hyper[key] = target
+                changed = True
+        if "pretrained_model" not in hyper:
+            hyper["pretrained_model"] = target
+            changed = True
+    if not changed:
+        return comet_ckpt
+
+    patched_dir = Path(tempfile.mkdtemp(prefix="lowres_comet_ckpt_"))
+    patched_path = patched_dir / ckpt_path.name
+    torch.save(ckpt, patched_path)
+    print(f"COMET: patched checkpoint pretrained_model -> {target}", file=sys.stderr)
+    return str(patched_path)
+
+
 def load_comet_model(load_from_checkpoint: Any, comet_ckpt: str) -> Any:
     try:
         return load_from_checkpoint(comet_ckpt, reload_params=True)
@@ -329,7 +366,17 @@ def prepare_comet_checkpoint(
         return comet_ckpt, torch, load_from_checkpoint
     except Exception as e:
         print(f"COMET 模型下载失败，将跳过 COMET: {e}", file=sys.stderr)
-        return None, torch, load_from_checkpoint
+    return None, torch, load_from_checkpoint
+
+
+def configure_offline_transformers(encoder_path: Path | None, offline: bool) -> None:
+    if not offline:
+        return
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    if encoder_path and encoder_path.is_dir():
+        os.environ.setdefault("COMET_ENCODER_MODEL", str(encoder_path.resolve()))
+        print(f"COMET: transformers offline; encoder={encoder_path.resolve()}", file=sys.stderr)
 
 
 def call_translate(
@@ -460,11 +507,18 @@ def main() -> int:
             "hparams.yaml 的 pretrained_model 指向该目录，避免离线加载时访问 Hugging Face。"
         ),
     )
+    parser.add_argument(
+        "--offline-eval-assets",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("OFFLINE_EVAL_ASSETS", "1") not in ("0", "false", "False"),
+        help="默认开启：设置 HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE，并强制 COMET 使用本地 encoder。",
+    )
     args = parser.parse_args()
     quiet_http_logging(str(args.http_log_level))
     flores200_spm_model = args.flores200_spm_model if args.flores200_spm_model.is_file() else None
     if flores200_spm_model:
         print(f"BLEU: 使用本地 FLORES200 SPM: {flores200_spm_model}", file=sys.stderr)
+    configure_offline_transformers(args.comet_encoder_model, bool(args.offline_eval_assets))
 
     eval_cfg = load_json(args.eval_config)
     manifest = load_json(args.manifest)
@@ -637,6 +691,7 @@ def main() -> int:
     comet_scores_by_key: dict[str, float] = {}
     if comet_ckpt and torch_mod is not None and comet_load_from_checkpoint is not None:
         gpus = 1 if torch_mod.cuda.is_available() else 0
+        comet_ckpt = patch_comet_checkpoint_pretrained_model(comet_ckpt, args.comet_encoder_model)
         comet_model = load_comet_model(comet_load_from_checkpoint, comet_ckpt)
 
         all_data = [
