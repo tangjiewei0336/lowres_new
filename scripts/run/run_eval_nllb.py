@@ -189,6 +189,24 @@ def main() -> int:
         default="auto",
         help="同 run_eval.py。",
     )
+    parser.add_argument(
+        "--flores200-spm-model",
+        type=Path,
+        default=eval_common.default_flores200_spm_path(),
+        help="本地 FLORES200/spBLEU SentencePiece 模型路径，同 run_eval.py。",
+    )
+    parser.add_argument(
+        "--comet-encoder-model",
+        type=Path,
+        default=root() / "models" / "xlm-roberta-large",
+        help="COMET encoder 本地路径，同 run_eval.py。",
+    )
+    parser.add_argument(
+        "--offline-eval-assets",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="默认开启：让 COMET/FLORES 评测优先使用本地离线资产。",
+    )
     args = parser.parse_args()
 
     try:
@@ -297,6 +315,9 @@ def main() -> int:
         bleu_tokenize=args.bleu_tokenize,
         comet_model_arg=args.comet_model,
         comet_batch_size=args.comet_batch_size,
+        flores200_spm_model=args.flores200_spm_model if args.flores200_spm_model.is_file() else None,
+        comet_encoder_model=args.comet_encoder_model if args.comet_encoder_model.is_dir() else None,
+        offline_eval_assets=bool(args.offline_eval_assets),
     )
 
     print(f"完成。输出目录: {run_dir}")

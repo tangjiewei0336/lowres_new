@@ -62,7 +62,17 @@ def write_metrics(
     bleu_tokenize: str,
     comet_model_arg: str,
     comet_batch_size: int,
+    flores200_spm_model: Path | None = None,
+    comet_encoder_model: Path | None = None,
+    offline_eval_assets: bool = True,
 ) -> None:
+    if flores200_spm_model is None:
+        p = eval_common.default_flores200_spm_path()
+        flores200_spm_model = p if p.is_file() else None
+    if comet_encoder_model is None:
+        p = root() / "models" / "xlm-roberta-large"
+        comet_encoder_model = p if p.is_dir() else None
+
     metrics: dict[str, Any] = {
         "by_corpus": {},
         "overall": {},
@@ -85,7 +95,12 @@ def write_metrics(
         refs = [t[1] for t in triples]
         corp, pair = key.split("|", 1)
         bleu_score, bleu_tok = eval_common.corpus_bleu_with_fallbacks(
-            hyps, refs, corp, pair, bleu_tokenize
+            hyps,
+            refs,
+            corp,
+            pair,
+            bleu_tokenize,
+            flores200_spm_model=flores200_spm_model,
         )
         if corp not in metrics["by_corpus"]:
             metrics["by_corpus"][corp] = {"by_pair": {}, "overall": {}}
@@ -122,72 +137,46 @@ def write_metrics(
         metrics["by_corpus"][corp]["overall"]["num"] = len(rr)
 
     comet_scores_by_key: dict[str, float] = {}
-    try:
-        import torch
-        from comet import download_model, load_from_checkpoint
-    except ImportError as e:
-        print(f"unbabel-comet/torch 不可用，跳过 COMET: {e}", file=sys.stderr)
-    else:
-        if comet_model_arg.lower() in ("none", "off", "disable", "disabled"):
-            print("COMET 已禁用（--comet-model=none）。", file=sys.stderr)
+    eval_common.configure_offline_transformers(comet_encoder_model, offline_eval_assets)
+    comet_ckpt, torch_mod, comet_load_from_checkpoint = eval_common.prepare_comet_checkpoint(
+        comet_model_arg,
+        run_dir,
+        encoder_path=comet_encoder_model,
+    )
+    if comet_ckpt and torch_mod is not None and comet_load_from_checkpoint is not None:
+        gpus = 1 if torch_mod.cuda.is_available() else 0
+        comet_ckpt = eval_common.patch_comet_checkpoint_pretrained_model(comet_ckpt, comet_encoder_model)
+        comet_model = eval_common.load_comet_model(comet_load_from_checkpoint, comet_ckpt)
+        all_data = [
+            {"src": r["source_text"], "mt": r["hypothesis"], "ref": r["reference_text"]}
+            for r in results
+        ]
+        out_all = comet_model.predict(all_data, batch_size=comet_batch_size, gpus=gpus)
+        scores_all = out_all.get("scores", [])
+        if not isinstance(scores_all, list) or len(scores_all) != len(results):
+            print("COMET 输出 scores 长度异常，将跳过 COMET。", file=sys.stderr)
         else:
-            gpus = 1 if torch.cuda.is_available() else 0
-            comet_ckpt: str | None = None
-            p = Path(comet_model_arg)
-            if p.exists():
-                if p.is_dir():
-                    cand = p / "checkpoints" / "model.ckpt"
-                    if cand.is_file():
-                        comet_ckpt = str(cand)
-                    else:
-                        ckpts = list(p.glob("**/*.ckpt"))
-                        if ckpts:
-                            comet_ckpt = str(ckpts[0])
-                else:
-                    comet_ckpt = str(p)
-            else:
-                try:
-                    comet_ckpt = download_model(
-                        comet_model_arg,
-                        saving_directory=str(run_dir / "comet_ckpt"),
-                    )
-                except Exception as e:
-                    print(f"COMET 模型下载失败，将跳过 COMET: {e}", file=sys.stderr)
-
-            if comet_ckpt:
-                comet_model = load_from_checkpoint(comet_ckpt)
-                all_data = [
-                    {"src": r["source_text"], "mt": r["hypothesis"], "ref": r["reference_text"]}
-                    for r in results
-                ]
-                out_all = comet_model.predict(all_data, batch_size=comet_batch_size, gpus=gpus)
-                scores_all = out_all.get("scores", [])
-                if not isinstance(scores_all, list) or len(scores_all) != len(results):
-                    print("COMET 输出 scores 长度异常，将跳过 COMET。", file=sys.stderr)
-                else:
-                    metrics["overall"]["comet"] = float(sum(scores_all) / max(1, len(scores_all)))
-                    sums: dict[str, float] = defaultdict(float)
-                    cnts: dict[str, int] = defaultdict(int)
-                    sums_corpus: dict[str, float] = defaultdict(float)
-                    cnts_corpus: dict[str, int] = defaultdict(int)
-                    for r, s in zip(results, scores_all, strict=True):
-                        corp = str(r.get("eval_corpus", "?"))
-                        pair = str(r.get("eval_pair") or (r["src_lang"] + "->" + r["tgt_lang"]))
-                        k = f"{corp}|{pair}"
-                        sv = float(s)
-                        sums[k] += sv
-                        cnts[k] += 1
-                        sums_corpus[corp] += sv
-                        cnts_corpus[corp] += 1
-                    for k, total in sums.items():
-                        comet_scores_by_key[k] = float(total / max(1, cnts[k]))
-                        corp, pair = k.split("|", 1)
-                        metrics["by_corpus"][corp]["by_pair"].setdefault(pair, {})
-                        metrics["by_corpus"][corp]["by_pair"][pair]["comet"] = comet_scores_by_key[k]
-                    for corp, total in sums_corpus.items():
-                        metrics["by_corpus"][corp]["overall"]["comet"] = float(
-                            total / max(1, cnts_corpus[corp])
-                        )
+            metrics["overall"]["comet"] = float(sum(scores_all) / max(1, len(scores_all)))
+            sums: dict[str, float] = defaultdict(float)
+            cnts: dict[str, int] = defaultdict(int)
+            sums_corpus: dict[str, float] = defaultdict(float)
+            cnts_corpus: dict[str, int] = defaultdict(int)
+            for r, s in zip(results, scores_all, strict=True):
+                corp = str(r.get("eval_corpus", "?"))
+                pair = str(r.get("eval_pair") or (r["src_lang"] + "->" + r["tgt_lang"]))
+                k = f"{corp}|{pair}"
+                sv = float(s)
+                sums[k] += sv
+                cnts[k] += 1
+                sums_corpus[corp] += sv
+                cnts_corpus[corp] += 1
+            for k, total in sums.items():
+                comet_scores_by_key[k] = float(total / max(1, cnts[k]))
+                corp, pair = k.split("|", 1)
+                metrics["by_corpus"][corp]["by_pair"].setdefault(pair, {})
+                metrics["by_corpus"][corp]["by_pair"][pair]["comet"] = comet_scores_by_key[k]
+            for corp, total in sums_corpus.items():
+                metrics["by_corpus"][corp]["overall"]["comet"] = float(total / max(1, cnts_corpus[corp]))
 
     metrics["bleu_tokenize_policy"] = bleu_tokenize
 
