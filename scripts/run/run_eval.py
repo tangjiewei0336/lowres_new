@@ -300,10 +300,12 @@ def patch_comet_checkpoint_pretrained_model(comet_ckpt: str, encoder_path: Path 
     changed = False
     hyper = ckpt.get("hyper_parameters") if isinstance(ckpt, dict) else None
     if isinstance(hyper, dict):
-        for key in ("pretrained_model", "encoder_model", "model_name", "model_name_or_path"):
-            if key in hyper and isinstance(hyper[key], str) and hyper[key] != target:
-                hyper[key] = target
-                changed = True
+        # COMET uses hparams.encoder_model as a class key (for example "XLMR")
+        # into comet.encoders.str2encoder. Only pretrained_model should become
+        # a local HF/Transformers path.
+        if isinstance(hyper.get("pretrained_model"), str) and hyper["pretrained_model"] != target:
+            hyper["pretrained_model"] = target
+            changed = True
         if "pretrained_model" not in hyper:
             hyper["pretrained_model"] = target
             changed = True
