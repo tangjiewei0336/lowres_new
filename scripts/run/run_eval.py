@@ -21,6 +21,7 @@ import re
 import sys
 import time
 import tempfile
+import shutil
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -271,6 +272,15 @@ def patch_comet_hparams_pretrained_model(comet_ckpt: str, encoder_path: Path | N
         print(f"COMET: patched {hparams} pretrained_model -> {encoder_path.resolve()}", file=sys.stderr)
 
 
+def find_comet_hparams(comet_ckpt: str) -> Path | None:
+    ckpt_path = Path(comet_ckpt)
+    candidates = [
+        ckpt_path.parent.parent / "hparams.yaml",
+        ckpt_path.parent / "hparams.yaml",
+    ]
+    return next((p for p in candidates if p.is_file()), None)
+
+
 def patch_comet_checkpoint_pretrained_model(comet_ckpt: str, encoder_path: Path | None) -> str:
     if not encoder_path or not encoder_path.is_dir():
         return comet_ckpt
@@ -300,9 +310,18 @@ def patch_comet_checkpoint_pretrained_model(comet_ckpt: str, encoder_path: Path 
     if not changed:
         return comet_ckpt
 
-    patched_dir = Path(tempfile.mkdtemp(prefix="lowres_comet_ckpt_"))
-    patched_path = patched_dir / ckpt_path.name
+    patched_root = Path(tempfile.mkdtemp(prefix="lowres_comet_"))
+    patched_ckpt_dir = patched_root / "checkpoints"
+    patched_ckpt_dir.mkdir(parents=True, exist_ok=True)
+    patched_path = patched_ckpt_dir / ckpt_path.name
     torch.save(ckpt, patched_path)
+
+    hparams = find_comet_hparams(comet_ckpt)
+    if hparams:
+        shutil.copyfile(hparams, patched_root / "hparams.yaml")
+    else:
+        (patched_root / "hparams.yaml").write_text(f"pretrained_model: {target}\n", encoding="utf-8")
+
     print(f"COMET: patched checkpoint pretrained_model -> {target}", file=sys.stderr)
     return str(patched_path)
 
@@ -312,6 +331,11 @@ def load_comet_model(load_from_checkpoint: Any, comet_ckpt: str) -> Any:
         return load_from_checkpoint(comet_ckpt, reload_params=True)
     except TypeError:
         return load_from_checkpoint(comet_ckpt)
+    except Exception as e:
+        if "hparams.yaml" in str(e):
+            print(f"COMET: reload_params=True 找不到 hparams.yaml，改用 checkpoint 内参数加载: {e}", file=sys.stderr)
+            return load_from_checkpoint(comet_ckpt)
+        raise
 
 
 def prepare_comet_checkpoint(
