@@ -26,5 +26,8 @@
     "qwen3_4b_instruct_2507": "Qwen/Qwen3-4B-Instruct-2507",
     "qwen3_5_27b": "Qwen/Qwen3.5-27B",
     "qwen3_5_27b_instruct": "Qwen/Qwen3.5-27B"
+  },
+  "comet_models": {
+    "comet_wmt22_da": "Unbabel/wmt22-comet-da"
   }
 }

@@ -27,6 +27,13 @@ pip install -r requirements-serve.txt
 export MODELSCOPE_CACHE="$PWD/datasets/cache/modelscope"
 ```
 
+常用模型和 COMET 评测模型可提前下载到 `models/`：
+
+```bash
+python scripts/download_models_to_models_dir.py --only qwen3_8b
+python scripts/download_models_to_models_dir.py --only comet_wmt22_da
+```
+
 ## 脚本流程
 
 1. **语法与依赖**：`python scripts/check_syntax_and_imports.py`
@@ -273,7 +280,7 @@ python scripts/dictionary/prepare_dictionary_moe_for_llamafactory.py --limit-per
 方案 A：混合训练，推荐默认方案。
 
 - 每个 pair expert 使用同方向句级数据为主：`training/data/multilingual/nllb_moe/`、`training/data/multilingual/fineweb2_synth/`。
-- 当前阶段先混句级数据：`nllb_moe + fineweb2_synth`。
+- 当前阶段先混句级数据：所有方向使用 `nllb_moe`；只有配置里显式打开的方向再加入 `fineweb2_synth`。
 - 同方向 `dictionary_moe` 先预留但默认不启用；后续如要打开，建议只占 `3% - 10%`，先试 `5%`。
 - 示例比例：当前 `NLLB/FineWeb sentence pairs = 100%`，后续词典 ablation 可试 `NLLB/FineWeb = 95%`、`dictionary_moe = 5%`。
 - 优点：训练分布仍接近 FLORES/COMET 的句级评测，同时给低资源方向补词汇召回。
@@ -290,7 +297,7 @@ python scripts/dictionary/prepare_dictionary_moe_for_llamafactory.py --limit-per
 - 用词典构造 hard examples，或筛掉明显不符合词典约束的伪平行数据。
 - 适合后续提高数据质量，但第一版不如方案 A 直接。
 
-当前建议：先采用方案 A 的句级版本。也就是继续训练 pair-level LoRA MoE，每个 expert 使用同方向 `nllb_moe + fineweb2_synth`，`dictionary_moe` 只在配置里预留，最终仍只用 FLORES 和 COMET 评估。等 baseline 有结果后，再比较 `0% / 5% / 10% dictionary_moe` 三个 ablation。
+当前建议：先采用方案 A 的句级版本。也就是继续训练 pair-level LoRA MoE，每个 expert 至少使用同方向 `nllb_moe`；对已有 FineWeb synthetic 的方向额外加入 `fineweb2_synth`；`dictionary_moe` 只在配置里预留，最终仍只用 FLORES 和 COMET 评估。等 baseline 有结果后，再比较 `0% / 5% / 10% dictionary_moe` 三个 ablation。
 
 #### mixed_moe 句级混合数据
 
@@ -303,7 +310,7 @@ training/moe_data_mix_config.json
 默认数据源：
 
 - `nllb`：启用，每方向最多 `100000` 条，读取 `training/data/multilingual/nllb_moe/nllb_mt_<src>__<tgt>.jsonl`。
-- `fineweb_synth`：启用，每方向最多 `100000` 条，读取 `training/data/multilingual/fineweb2_synth/fineweb_synth_<src>__<tgt>.jsonl`。
+- `fineweb_synth`：默认不启用；只在 `pairs[].sources.fineweb_synth.enabled=true` 的方向启用，每方向最多 `100000` 条，读取 `training/data/multilingual/fineweb2_synth/fineweb_synth_<src>__<tgt>.jsonl`。当前配置只打开 `tha_Thai<->zho_Hans` 与 `tha_Thai<->eng_Latn`。
 - `dictionary`：预留，默认 `enabled=false` 且 `limit=0`。
 
 生成 mixed 数据：
@@ -543,7 +550,13 @@ python scripts/prepare/prepare_wikipedia_english_for_llamafactory.py \
 
 `scripts/run/run_eval.py` 会在开始 vLLM 翻译前先解析或下载 COMET 模型，避免生成完全部 hypothesis 后才发现 COMET 权重不可用。首次运行 COMET 需可访问外网；BLEU 仅本地计算。
 
-默认 `--comet-model models/Unbabel_wmt22-comet-da` 会优先查找本地 ckpt；若不存在，会按远程模型 `Unbabel/wmt22-comet-da` 预下载到该目录，后续评测复用本地文件。只跑 BLEU 时可显式禁用：
+默认 `--comet-model models/Unbabel_wmt22-comet-da` 会优先查找本地 ckpt；若不存在，会按远程模型 `Unbabel/wmt22-comet-da` 预下载到该目录，后续评测复用本地文件。也可以在评测前显式下载：
+
+```bash
+python scripts/download_models_to_models_dir.py --only comet_wmt22_da
+```
+
+只跑 BLEU 时可显式禁用：
 
 ```bash
 python scripts/run/run_eval.py --comet-model none

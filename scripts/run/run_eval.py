@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 import os
 import sys
 import time
@@ -30,6 +31,18 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 from flores_lang_zh import english_translation_instruction  # noqa: E402
+
+
+def quiet_http_logging(level_name: str = "WARNING") -> None:
+    level = getattr(logging, level_name.upper(), logging.WARNING)
+    for name in (
+        "httpx",
+        "httpcore",
+        "openai",
+        "openai._base_client",
+        "openai.resources",
+    ):
+        logging.getLogger(name).setLevel(level)
 
 
 def root() -> Path:
@@ -350,7 +363,15 @@ def main() -> int:
         action="store_true",
         help="在 hypotheses.jsonl 中额外写出分词后的 hypothesis/reference（主要用于泰语 PyThaiNLP）。",
     )
+    parser.add_argument(
+        "--http-log-level",
+        type=str,
+        default=os.environ.get("HTTP_LOG_LEVEL", "WARNING"),
+        choices=("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"),
+        help="OpenAI/httpx/httpcore 日志级别。默认 WARNING，只保留进度条和关键警告。",
+    )
     args = parser.parse_args()
+    quiet_http_logging(str(args.http_log_level))
 
     eval_cfg = load_json(args.eval_config)
     manifest = load_json(args.manifest)

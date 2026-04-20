@@ -67,7 +67,9 @@ training/moe_data_mix_config.json
 Default sources are:
 
 - `nllb`: enabled, up to `100000` rows per direction.
-- `fineweb_synth`: enabled, up to `100000` rows per direction.
+- `fineweb_synth`: disabled by default, enabled only for directions with
+  `pairs[].sources.fineweb_synth.enabled=true`. The current config enables
+  `tha_Thai<->zho_Hans` and `tha_Thai<->eng_Latn`.
 - `dictionary`: reserved but disabled with `limit=0`.
 
 The mixed files are written to:

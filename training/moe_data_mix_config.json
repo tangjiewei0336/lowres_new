@@ -8,7 +8,7 @@
       "path_template": "multilingual/nllb_moe/nllb_mt_{src}__{tgt}.jsonl"
     },
     "fineweb_synth": {
-      "enabled": true,
+      "enabled": false,
       "limit": 100000,
       "path_template": "multilingual/fineweb2_synth/fineweb_synth_{src}__{tgt}.jsonl"
     },
@@ -31,10 +31,34 @@
     {"src_lang": "zho_Hans", "tgt_lang": "vie_Latn"},
     {"src_lang": "vie_Latn", "tgt_lang": "eng_Latn"},
     {"src_lang": "eng_Latn", "tgt_lang": "vie_Latn"},
-    {"src_lang": "tha_Thai", "tgt_lang": "zho_Hans"},
-    {"src_lang": "zho_Hans", "tgt_lang": "tha_Thai"},
-    {"src_lang": "tha_Thai", "tgt_lang": "eng_Latn"},
-    {"src_lang": "eng_Latn", "tgt_lang": "tha_Thai"},
+    {
+      "src_lang": "tha_Thai",
+      "tgt_lang": "zho_Hans",
+      "sources": {
+        "fineweb_synth": {"enabled": true}
+      }
+    },
+    {
+      "src_lang": "zho_Hans",
+      "tgt_lang": "tha_Thai",
+      "sources": {
+        "fineweb_synth": {"enabled": true}
+      }
+    },
+    {
+      "src_lang": "tha_Thai",
+      "tgt_lang": "eng_Latn",
+      "sources": {
+        "fineweb_synth": {"enabled": true}
+      }
+    },
+    {
+      "src_lang": "eng_Latn",
+      "tgt_lang": "tha_Thai",
+      "sources": {
+        "fineweb_synth": {"enabled": true}
+      }
+    },
     {"src_lang": "tgl_Latn", "tgt_lang": "zho_Hans"},
     {"src_lang": "zho_Hans", "tgt_lang": "tgl_Latn"},
     {"src_lang": "tgl_Latn", "tgt_lang": "eng_Latn"},
