@@ -20,6 +20,7 @@ usage() {
 配置名:
   qwen3, qwen3-4b           Qwen3-4B 基座（关闭 thinking）
   qwen3-8b                  Qwen3-8B 基座（关闭 thinking）
+  qwen3-8b-moe              Qwen3-8B + pair-level LoRA MoE adapters
   qwen3-instruct-2507       Qwen3-4B-Instruct-2507
   qwen3.5-27b-instruct      Qwen3.5-27B（关闭 thinking，Instruct alias）
   smollm3                   SmolLM3-3B
@@ -28,6 +29,7 @@ usage() {
 示例:
   bash scripts/serve/run.sh qwen3-4b
   bash scripts/serve/run.sh qwen3-8b
+  bash scripts/serve/run.sh qwen3-8b-moe
   TENSOR_PARALLEL_SIZE=4 bash scripts/serve/run.sh qwen3.5-27b-instruct
   MODEL_PATH=/path/to/merged bash scripts/serve/run.sh qwen3-instruct-2507
 EOF
@@ -45,6 +47,9 @@ case "${1}" in
     ;;
   qwen3-8b|qwen38b)
     exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_8b.sh"
+    ;;
+  qwen3-8b-moe|qwen38b-moe|moe-qwen3-8b)
+    exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_8b_moe_lora.sh"
     ;;
   qwen3-instruct-2507|qwen3_4b_instruct_2507)
     exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_instruct_2507.sh"

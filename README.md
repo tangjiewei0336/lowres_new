@@ -329,6 +329,39 @@ python scripts/moe/generate_pair_expert_assets.py \
   --training-file-prefix mixed_moe
 ```
 
+#### LoRA MoE 部署与调用
+
+训练完成后，每个方向会得到一个 LoRA adapter。推荐用 vLLM 同时加载 Qwen3-8B base 与全部 pair expert adapter：
+
+```bash
+conda activate lowres-serve
+bash scripts/serve/serve_vllm_qwen3_8b_moe_lora.sh
+```
+
+该脚本读取 `training/moe_router_manifest.json`，把每个 `adapter_name=adapter_path` 注册成 vLLM 可调用的 model name。若 GPU 机器上的路径不同：
+
+```bash
+MODEL_PATH=/path/to/Qwen3-8B \
+MANIFEST=/path/to/moe_router_manifest.json \
+bash scripts/serve/serve_vllm_qwen3_8b_moe_lora.sh
+```
+
+单条翻译用 router 脚本：
+
+```bash
+python scripts/moe/translate_with_moe_router.py \
+  --src-lang tha_Thai \
+  --tgt-lang zho_Hans \
+  --text "สวัสดีครับ" \
+  --print-model
+```
+
+查看支持的方向：
+
+```bash
+python scripts/moe/translate_with_moe_router.py --list-pairs
+```
+
 ### prepare_fineweb2_monolingual_for_llamafactory.py
 
 用途：准备单语继续预训练数据，输出 LLaMA-Factory 可用的 `{"text": "..."}` JSONL，并生成 `dataset.info` / `dataset_info.json`。

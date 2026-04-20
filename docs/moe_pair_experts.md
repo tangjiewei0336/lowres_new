@@ -119,9 +119,45 @@ python scripts/moe/generate_pair_expert_assets.py \
 Serve the base model with all LoRA adapters enabled, then route each request by
 `src_lang` and `tgt_lang` using `training/moe_router_manifest.json`.
 
-With vLLM, the simple serving pattern is to expose each LoRA adapter as a
-separate model name via `--enable-lora --lora-modules`. The router then calls
-the adapter model name matching the language pair.
+With vLLM, expose each LoRA adapter as a separate model name via
+`--enable-lora --lora-modules`. The router then calls the adapter model name
+matching the language pair.
+
+```bash
+conda activate lowres-serve
+bash scripts/serve/serve_vllm_qwen3_8b_moe_lora.sh
+```
+
+The serve script reads:
+
+```text
+training/moe_router_manifest.json
+```
+
+and registers every `adapter_name=adapter_path` entry. If the base model or
+adapter paths differ on the GPU machine, override them:
+
+```bash
+MODEL_PATH=/path/to/Qwen3-8B \
+MANIFEST=/path/to/moe_router_manifest.json \
+bash scripts/serve/serve_vllm_qwen3_8b_moe_lora.sh
+```
+
+Translate through the router:
+
+```bash
+python scripts/moe/translate_with_moe_router.py \
+  --src-lang tha_Thai \
+  --tgt-lang zho_Hans \
+  --text "สวัสดีครับ" \
+  --print-model
+```
+
+List supported routes:
+
+```bash
+python scripts/moe/translate_with_moe_router.py --list-pairs
+```
 
 This is pair-level MoE: the expert choice is made once per request. It is
 intentional for this experiment because the translation direction is known
