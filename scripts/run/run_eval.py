@@ -22,6 +22,7 @@ import sys
 import time
 import tempfile
 import shutil
+import copy
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -65,6 +66,29 @@ def read_items_jsonl(path: Path) -> list[dict[str, Any]]:
             if not line:
                 continue
             rows.append(json.loads(line))
+    return rows
+
+
+def result_key(x: dict[str, Any]) -> tuple:
+    return (
+        x.get("eval_corpus", x.get("dataset", "")),
+        x.get("src_lang", ""),
+        x.get("tgt_lang", ""),
+        str(x.get("sample_id", "")),
+    )
+
+
+def validate_hypotheses_rows(rows: list[dict[str, Any]]) -> None:
+    required = ("source_text", "reference_text", "src_lang", "tgt_lang", "hypothesis")
+    for idx, row in enumerate(rows, start=1):
+        missing = [k for k in required if k not in row]
+        if missing:
+            raise ValueError(f"hypotheses 第 {idx} 行缺少字段: {', '.join(missing)}")
+
+
+def load_hypotheses_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows = read_items_jsonl(path)
+    validate_hypotheses_rows(rows)
     return rows
 
 
@@ -435,6 +459,12 @@ def call_translate(
     return out
 
 
+def write_hypotheses_jsonl(path: Path, results: list[dict[str, Any]]) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for r in results:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="vLLM OpenAI 兼容接口 + BLEU/COMET 评估")
     parser.add_argument(
@@ -509,6 +539,18 @@ def main() -> int:
         help="在 hypotheses.jsonl 中额外写出分词后的 hypothesis/reference（主要用于泰语 PyThaiNLP）。",
     )
     parser.add_argument(
+        "--hypotheses-jsonl",
+        type=Path,
+        default=None,
+        help="若指定则跳过 API 生成，直接读取已有 hypotheses.jsonl 做 BLEU/COMET 汇总。",
+    )
+    parser.add_argument(
+        "--output-run-dir",
+        type=Path,
+        default=None,
+        help="输出目录；配合 --hypotheses-jsonl 时可把 metrics 写到指定目录。",
+    )
+    parser.add_argument(
         "--http-log-level",
         type=str,
         default=os.environ.get("HTTP_LOG_LEVEL", "WARNING"),
@@ -561,88 +603,112 @@ def main() -> int:
     max_tokens = int(eval_cfg.get("max_tokens", 512))
     max_workers = int(eval_cfg.get("max_workers", 8))
     base_out = root() / eval_cfg.get("output_dir", "eval_multilingual")
-    run_dir = base_out / f"{args.model_tag}_{int(time.time())}"
+    if args.output_run_dir is not None:
+        run_dir = args.output_run_dir
+    elif args.hypotheses_jsonl and args.hypotheses_jsonl.name == "hypotheses.jsonl":
+        run_dir = args.hypotheses_jsonl.parent
+    else:
+        run_dir = base_out / f"{args.model_tag}_{int(time.time())}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+
+    if args.hypotheses_jsonl is not None:
+        if not args.hypotheses_jsonl.is_file():
+            print(f"未找到 hypotheses_jsonl: {args.hypotheses_jsonl}", file=sys.stderr)
+            return 1
+        loaded_results = load_hypotheses_jsonl(args.hypotheses_jsonl)
+        manifest_keys = {result_key(it) for it in items}
+        if len(loaded_results) != len(items):
+            print(
+                f"warning: hypotheses 数量({len(loaded_results)}) 与 manifest 条目数({len(items)}) 不一致，将按 hypotheses 实际内容汇总。",
+                file=sys.stderr,
+            )
+        by_key = {result_key(r): r for r in loaded_results}
+        missing = [it for it in items if result_key(it) not in by_key]
+        if missing:
+            print(
+                f"warning: manifest 中有 {len(missing)} 条未在 hypotheses 中找到，将仅评估已命中的样本。",
+                file=sys.stderr,
+            )
+        results = [copy.deepcopy(by_key[result_key(it)]) for it in items if result_key(it) in by_key]
+        extra_rows = [r for r in loaded_results if result_key(r) not in manifest_keys]
+        if extra_rows:
+            print(
+                f"warning: hypotheses 中有 {len(extra_rows)} 条不在当前 manifest，已附加到评估结果末尾。",
+                file=sys.stderr,
+            )
+            results.extend(extra_rows)
+        hyp_path = run_dir / "hypotheses.jsonl"
+        if args.hypotheses_jsonl.resolve() != hyp_path.resolve():
+            write_hypotheses_jsonl(hyp_path, results)
+        else:
+            hyp_path = args.hypotheses_jsonl
+    else:
+        client = OpenAI(base_url=args.base_url, api_key=args.api_key)
+        lock_results: list[dict[str, Any]] = []
+
+        def _one(it: dict[str, Any]) -> dict[str, Any]:
+            src = it["source_text"]
+            ref = it["reference_text"]
+            sl = it["src_lang"]
+            tl = it["tgt_lang"]
+            hyp = call_translate(
+                client,
+                args.served_model_name,
+                sl,
+                tl,
+                src,
+                max_tokens,
+                args.model_family,
+            )
+            out = {**it, "hypothesis": hyp}
+            if args.dump_segmentation:
+                corp = str(it.get("eval_corpus", "?"))
+                pair = str(it.get("eval_pair") or (sl + "->" + tl))
+                tok = sacrebleu_tokenize_for_group(corp, pair, str(args.bleu_tokenize))
+                if tok == _THAI_SACREbleu_TOK:
+                    out["hypothesis_segmented"] = _segment_thai_pythai_words([hyp])[0]
+                    out["reference_segmented"] = _segment_thai_pythai_words([ref])[0]
+                    out["segmentation_tokenizer"] = tok
+                elif tok in ("zh", "flores200"):
+                    try:
+                        out["hypothesis_segmented"] = _segment_with_sacrebleu_tokenizer(
+                            [hyp],
+                            tok,
+                            flores200_spm_model=flores200_spm_model,
+                        )[0]
+                        out["reference_segmented"] = _segment_with_sacrebleu_tokenizer(
+                            [ref],
+                            tok,
+                            flores200_spm_model=flores200_spm_model,
+                        )[0]
+                        out["segmentation_tokenizer"] = (
+                            "flores200_local_spm"
+                            if tok == "flores200" and flores200_spm_model
+                            else tok
+                        )
+                    except Exception as e:
+                        out["segmentation_tokenizer"] = f"{tok}_dump_failed"
+                        out["segmentation_error"] = str(e)
+            return out
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = [ex.submit(_one, it) for it in items]
+            for fut in tqdm(as_completed(futs), total=len(futs), desc="translate"):
+                lock_results.append(fut.result())
+
+        by_key = {result_key(r): r for r in lock_results}
+        for it in items:
+            results.append(by_key[result_key(it)])
+
+        hyp_path = run_dir / "hypotheses.jsonl"
+        write_hypotheses_jsonl(hyp_path, results)
 
     comet_ckpt, torch_mod, comet_load_from_checkpoint = prepare_comet_checkpoint(
         str(args.comet_model),
         run_dir,
         encoder_path=args.comet_encoder_model,
     )
-
-    client = OpenAI(base_url=args.base_url, api_key=args.api_key)
-
-    results: list[dict[str, Any]] = []
-    lock_results: list[dict[str, Any]] = []
-
-    def _one(it: dict[str, Any]) -> dict[str, Any]:
-        src = it["source_text"]
-        ref = it["reference_text"]
-        sl = it["src_lang"]
-        tl = it["tgt_lang"]
-        hyp = call_translate(
-            client,
-            args.served_model_name,
-            sl,
-            tl,
-            src,
-            max_tokens,
-            args.model_family,
-        )
-        out = {**it, "hypothesis": hyp}
-        if args.dump_segmentation:
-            corp = str(it.get("eval_corpus", "?"))
-            pair = str(it.get("eval_pair") or (sl + "->" + tl))
-            tok = sacrebleu_tokenize_for_group(corp, pair, str(args.bleu_tokenize))
-            if tok == _THAI_SACREbleu_TOK:
-                out["hypothesis_segmented"] = _segment_thai_pythai_words([hyp])[0]
-                out["reference_segmented"] = _segment_thai_pythai_words([ref])[0]
-                out["segmentation_tokenizer"] = tok
-            elif tok in ("zh", "flores200"):
-                # 中文：zh 分词；FLORES 默认 flores200（spBLEU）也常用于中文
-                try:
-                    out["hypothesis_segmented"] = _segment_with_sacrebleu_tokenizer(
-                        [hyp],
-                        tok,
-                        flores200_spm_model=flores200_spm_model,
-                    )[0]
-                    out["reference_segmented"] = _segment_with_sacrebleu_tokenizer(
-                        [ref],
-                        tok,
-                        flores200_spm_model=flores200_spm_model,
-                    )[0]
-                    out["segmentation_tokenizer"] = (
-                        "flores200_local_spm"
-                        if tok == "flores200" and flores200_spm_model
-                        else tok
-                    )
-                except Exception as e:
-                    # dump 不影响主流程
-                    out["segmentation_tokenizer"] = f"{tok}_dump_failed"
-                    out["segmentation_error"] = str(e)
-        return out
-
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = [ex.submit(_one, it) for it in items]
-        for fut in tqdm(as_completed(futs), total=len(futs), desc="translate"):
-            lock_results.append(fut.result())
-
-    # 保序：按原 items 顺序输出（as_completed 无序）
-    def key_fn(x: dict[str, Any]) -> tuple:
-        return (
-            x.get("eval_corpus", x.get("dataset", "")),
-            x.get("src_lang", ""),
-            x.get("tgt_lang", ""),
-            str(x.get("sample_id", "")),
-        )
-    by_key = {key_fn(r): r for r in lock_results}
-    for it in items:
-        results.append(by_key[key_fn(it)])
-
-    hyp_path = run_dir / "hypotheses.jsonl"
-    with open(hyp_path, "w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     # 输出格式：按数据集(corpus)->语言对(pair) 分层，便于对比
     metrics: dict[str, Any] = {
