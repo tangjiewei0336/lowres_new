@@ -62,6 +62,16 @@ def q(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
+def maybe_relativize_path(path_str: str, *, base_dir: Path, force_absolute: bool) -> str:
+    p = Path(path_str)
+    if force_absolute or not p.is_absolute():
+        return str(p)
+    try:
+        return str(p.relative_to(base_dir))
+    except ValueError:
+        return str(p)
+
+
 def render_yaml(
     expert: Expert,
     *,
@@ -193,10 +203,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--model-name-or-path",
-        default="/root/lowres_new/models/Qwen3-8B_latest",
+        default="models/Qwen3-8B_latest",
     )
-    p.add_argument("--dataset-dir", default="/root/lowres_new/training/data")
-    p.add_argument("--output-root", default="/root/lowres_new/models/Qwen3-8B_moe_pair_experts")
+    p.add_argument("--dataset-dir", default="training/data")
+    p.add_argument("--output-root", default="models/Qwen3-8B_moe_pair_experts")
     p.add_argument("--cutoff-len", type=int, default=512)
     p.add_argument("--lora-rank", type=int, default=8)
     p.add_argument("--batch-size", type=int, default=4)
@@ -206,12 +216,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--save-steps", type=int, default=200)
     p.add_argument("--logging-steps", type=int, default=20)
     p.add_argument("--preprocessing-num-workers", type=int, default=4)
+    p.add_argument(
+        "--absolute-paths",
+        action="store_true",
+        help="Write absolute paths in generated YAML/router manifest instead of repo-relative paths.",
+    )
     p.add_argument("--dry-run", action="store_true")
     return p
 
 
 def main() -> int:
     args = build_arg_parser().parse_args()
+    root = repo_root()
+    model_name_or_path = maybe_relativize_path(
+        args.model_name_or_path,
+        base_dir=root,
+        force_absolute=bool(args.absolute_paths),
+    )
+    dataset_dir = maybe_relativize_path(
+        args.dataset_dir,
+        base_dir=root,
+        force_absolute=bool(args.absolute_paths),
+    )
+    output_root = maybe_relativize_path(
+        args.output_root,
+        base_dir=root,
+        force_absolute=bool(args.absolute_paths),
+    )
     expert_pairs: list[tuple[str, str]] = []
     for src in args.source_langs:
         for tgt in args.target_langs:
@@ -250,7 +281,7 @@ def main() -> int:
     }
     router_manifest = {
         "description": "Route each language pair to its dedicated LoRA expert adapter.",
-        "base_model": args.model_name_or_path,
+        "base_model": model_name_or_path,
         "served_model_name": "qwen3-8b-moe-router",
         "experts": [
             {
@@ -258,7 +289,7 @@ def main() -> int:
                 "tgt_lang": e.tgt_lang,
                 "dataset": expert_dataset_name(e, args.training_dataset_prefix),
                 "adapter_name": e.adapter_name,
-                "adapter_path": f"{args.output_root.rstrip('/')}/{e.adapter_name}",
+                "adapter_path": f"{output_root.rstrip('/')}/{e.adapter_name}",
             }
             for e in experts
         ],
@@ -273,9 +304,9 @@ def main() -> int:
         cfg = render_yaml(
             e,
             dataset_name=expert_dataset_name(e, args.training_dataset_prefix),
-            model_name_or_path=args.model_name_or_path,
-            dataset_dir=args.dataset_dir,
-            output_root=args.output_root,
+            model_name_or_path=model_name_or_path,
+            dataset_dir=dataset_dir,
+            output_root=output_root,
             cutoff_len=args.cutoff_len,
             lora_rank=args.lora_rank,
             batch_size=args.batch_size,

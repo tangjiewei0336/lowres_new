@@ -398,6 +398,12 @@ MANIFEST=/path/to/moe_router_manifest.json \
 bash scripts/serve/serve_vllm_qwen3_8b_moe_lora.sh
 ```
 
+默认推荐让 `training/moe_router_manifest.json` 里的 `base_model` / `adapter_path` 使用仓库相对路径（如 `models/...`），避免把 `/root/lowres_new/...` 这类机器相关绝对路径写死到文件里。重新生成相关配置可运行：
+
+```bash
+python scripts/moe/generate_pair_expert_assets.py
+```
+
 单条翻译用 router 脚本：
 
 ```bash
@@ -412,6 +418,45 @@ python scripts/moe/translate_with_moe_router.py \
 
 ```bash
 python scripts/moe/translate_with_moe_router.py --list-pairs
+```
+
+如需在多个训练 checkpoint（例如 `checkpoint-200/400/600/782`）之间为每个 expert 挑选最佳 LoRA adapter，可先分别完成评测，再根据 FLORES 上的 COMET 分数生成新的 router manifest：
+
+```bash
+python scripts/moe/select_best_moe_adapters_by_comet.py \
+  --manifest training/moe_router_manifest.json \
+  --eval-root /path/to/eval_multilingual \
+  --steps 200 400 600 782 \
+  --output-manifest training/moe_router_manifest.best_by_comet.json \
+  --summary-csv training/moe_best_checkpoints_by_comet.csv
+```
+
+脚本会把每个 `adapter_path` 改写成对应 expert 下的最佳 `checkpoint-*` 目录，并写出一份汇总 CSV。
+
+MoE 整体评测可直接走 router 方式，不需要手工逐个语言对调用：
+
+```bash
+bash scripts/run/run_eval_moe_router.sh
+```
+
+默认使用 `training/moe_router_manifest.json`。若已按 COMET 选出最佳 checkpoint，可改成：
+
+```bash
+MOE_ROUTER_MANIFEST=training/moe_router_manifest.best_by_comet.json \
+EVAL_MODEL_TAG=moe_router_best_ckpt \
+bash scripts/run/run_eval_moe_router.sh
+```
+
+该脚本会读取 `datasets/eval_manifest.json`，按 `src_lang/tgt_lang` 自动路由到对应 `adapter_name`，并输出与 `scripts/run/run_eval.py` 同格式的：
+
+- `hypotheses.jsonl`
+- `metrics.json`
+- `metrics.csv`
+
+如只想先跑 BLEU，跳过 COMET：
+
+```bash
+bash scripts/run/run_eval_moe_router.sh --comet-model none
 ```
 
 ### prepare_fineweb2_monolingual_for_llamafactory.py
