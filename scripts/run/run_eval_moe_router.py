@@ -152,6 +152,11 @@ def main() -> int:
         action="store_true",
         help="在 hypotheses.jsonl 中额外写出分词后的 hypothesis/reference。",
     )
+    parser.add_argument(
+        "--strict-routes",
+        action="store_true",
+        help="若 router manifest 缺少某些语向则直接报错；默认跳过这些样本。",
+    )
     args = parser.parse_args()
 
     eval_common.quiet_http_logging(str(args.http_log_level))
@@ -174,17 +179,26 @@ def main() -> int:
     router_manifest = load_router_manifest(args.router_manifest)
     router = build_router(router_manifest)
 
-    missing_pairs = sorted({
-        f"{it['src_lang']}->{it['tgt_lang']}"
-        for it in items
-        if (str(it["src_lang"]), str(it["tgt_lang"])) not in router
-    })
+    missing_pairs = sorted(
+        {
+            f"{it['src_lang']}->{it['tgt_lang']}"
+            for it in items
+            if (str(it["src_lang"]), str(it["tgt_lang"])) not in router
+        }
+    )
     if missing_pairs:
-        print(
-            "MoE router manifest 缺少以下语向: " + ", ".join(missing_pairs),
-            file=sys.stderr,
-        )
-        return 1
+        msg = "MoE router manifest 缺少以下语向，将跳过: " + ", ".join(missing_pairs)
+        if args.strict_routes:
+            print(msg, file=sys.stderr)
+            return 1
+        print(msg, file=sys.stderr)
+        items = [
+            it for it in items
+            if (str(it["src_lang"]), str(it["tgt_lang"])) in router
+        ]
+        if not items:
+            print("所有评测样本都缺少对应语向，无法继续。", file=sys.stderr)
+            return 1
 
     max_tokens = int(args.max_tokens or eval_cfg.get("max_tokens", 512))
     max_workers = int(args.max_workers or eval_cfg.get("max_workers", 8))
