@@ -1,0 +1,3 @@
+{"source":"fixture","src_lang":"zho_Hans","tgt_lang":"eng_Latn","source_text":"字典","target_text":"dictionary","target_candidates":["dictionary"],"confidence":0.95,"relation":"translation","source_url":"fixture","license_note":"fixture"}
+{"source":"fixture","src_lang":"zho_Hans","tgt_lang":"eng_Latn","source_text":"语言","target_text":"language","target_candidates":["language"],"confidence":0.88,"relation":"translation","source_url":"fixture","license_note":"fixture"}
+{"source":"fixture","src_lang":"zho_Hans","tgt_lang":"eng_Latn","source_text":"後","target_text":"after","target_candidates":["after"],"confidence":0.5,"relation":"translation","source_url":"fixture","license_note":"fixture"}
