@@ -3,7 +3,7 @@
 使用 OpenAI 兼容 API 按 eval manifest 批量生成 hypothesis，并写成与 run_eval.py 对齐的 hypotheses.jsonl。
 
 示例：
-  python scripts/run/generate_hypotheses_openai.py \
+  python scripts/run/generate/generate_hypotheses_openai.py \
     --base-url "" \
     --api-key "$OPENAI_API_KEY" \
     --model your-model-name \
@@ -22,6 +22,11 @@ from typing import Any
 
 from openai import OpenAI
 from tqdm import tqdm
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+RUN_DIR = SCRIPT_DIR.parent
+if str(RUN_DIR) not in sys.path:
+    sys.path.insert(0, str(RUN_DIR))
 
 import run_eval as eval_common
 

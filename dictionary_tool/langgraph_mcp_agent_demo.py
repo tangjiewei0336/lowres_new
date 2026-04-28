@@ -13,7 +13,7 @@ def repo_root() -> Path:
 
 
 async def main_async() -> int:
-    ap = argparse.ArgumentParser(description="LangGraph agent demo that automatically calls the local MCP dictionary server.")
+    ap = argparse.ArgumentParser(description="Dictionary tool-calling agent demo (local methods, no MCP).")
     ap.add_argument("--text", required=True, help="Source text to translate.")
     ap.add_argument("--src-lang", required=True)
     ap.add_argument("--tgt-lang", required=True)
@@ -28,6 +28,7 @@ async def main_async() -> int:
     )
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--temperature", type=float, default=0.0)
+    ap.add_argument("--debug", action="store_true", default=False, help="打印组装后的提示词。")
     args = ap.parse_args()
     async with LangGraphDictionaryAgentRuntime(
         model=args.model,
@@ -37,14 +38,9 @@ async def main_async() -> int:
         lexicon_dir=args.lexicon_dir,
         max_tokens=int(args.max_tokens),
         temperature=float(args.temperature),
+        debug=bool(args.debug),
     ) as runtime:
-        print(
-            await runtime.translate(
-                text=args.text,
-                src_lang=args.src_lang,
-                tgt_lang=args.tgt_lang,
-            )
-        )
+        print(await runtime.translate(text=args.text, src_lang=args.src_lang, tgt_lang=args.tgt_lang))
         return 0
 
 

@@ -162,23 +162,25 @@ class DictionaryIndex:
             out.append({"src_lang": src_lang, "tgt_lang": tgt_lang, "size": len(entries)})
         return out
 
-    def lookup(self, src_lang: str, tgt_lang: str, term: str, top_k: int = 5) -> dict[str, Any]:
+    def lookup(
+        self,
+        src_lang: str,
+        tgt_lang: str,
+        term: str,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
         pair = (src_lang, tgt_lang)
         if pair not in self._pair_entries:
             raise ValueError(f"Dictionary pair not found: {src_lang}->{tgt_lang}")
 
         key = normalize_key(term)
-        exact_matches = list(self._pair_exact[pair].get(key, []))
-        if exact_matches:
-            ranked = sorted(exact_matches, key=lambda x: (-x.confidence, x.target_text))
-            return {
-                "query": term,
-                "src_lang": src_lang,
-                "tgt_lang": tgt_lang,
-                "match_type": "exact",
-                "results": [x.to_dict() for x in ranked[:top_k]],
-            }
+        if top_k < 1:
+            raise ValueError("top_k must be >= 1")
+        if offset < 0:
+            raise ValueError("offset must be >= 0")
 
+        # 统一为包含关系检索（包含 exact），便于分页遍历全部命中。
         contains_matches = [
             entry
             for entry in self._pair_entries[pair]
@@ -193,12 +195,17 @@ class DictionaryIndex:
                 x.target_text,
             ),
         )
+        paged = ranked[offset : offset + top_k]
         return {
             "query": term,
             "src_lang": src_lang,
             "tgt_lang": tgt_lang,
-            "match_type": "contains" if ranked else "none",
-            "results": [x.to_dict() for x in ranked[:top_k]],
+            "match_type": "contains",
+            "total_matches": len(ranked),
+            "offset": offset,
+            "top_k": top_k,
+            "has_more": offset + top_k < len(ranked),
+            "results": [x.to_dict() for x in paged],
         }
 
     def search_pairs(

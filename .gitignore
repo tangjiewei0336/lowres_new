@@ -12,3 +12,5 @@ eval_multilingual/
 *.log
 training/data
 **/nohup.out
+.env
+.env.local

@@ -41,7 +41,7 @@ def result_key(x: dict) -> tuple:
 
 
 async def main_async() -> int:
-    ap = argparse.ArgumentParser(description="Evaluate the LangGraph+MCP translation agent on FLORES.")
+    ap = argparse.ArgumentParser(description="Evaluate the dictionary tool-calling translation agent on FLORES.")
     ap.add_argument(
         "--eval-config",
         type=Path,
@@ -62,11 +62,12 @@ async def main_async() -> int:
         type=Path,
         default=repo_root() / "training" / "data" / "dictionaries" / "moe_lexicon",
     )
-    ap.add_argument("--model-tag", default="langgraph_mcp_agent")
+    ap.add_argument("--model-tag", default="dictionary_tool_agent")
     ap.add_argument("--output-run-dir", type=Path, default=None)
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--temperature", type=float, default=0.0)
+    ap.add_argument("--debug", action="store_true", default=False, help="打印每条样本组装后的提示词。")
     ap.add_argument("--comet-batch-size", type=int, default=8)
     ap.add_argument("--comet-model", default="models/Unbabel_wmt22-comet-da")
     ap.add_argument("--bleu-tokenize", choices=("auto", "flores200", "legacy"), default="auto")
@@ -136,6 +137,7 @@ async def main_async() -> int:
         lexicon_dir=args.lexicon_dir,
         max_tokens=int(args.max_tokens),
         temperature=float(args.temperature),
+        debug=bool(args.debug),
     ) as runtime:
         for it in tqdm(pending_items, total=len(pending_items), desc="translate"):
             hyp = await runtime.translate(
@@ -157,7 +159,7 @@ async def main_async() -> int:
     results = [by_key[result_key(it)] for it in items if result_key(it) in by_key]
 
     meta = {
-        "provider": "langgraph_mcp_agent",
+        "provider": "dictionary_tool_agent",
         "model": args.model,
         "model_family": args.model_family,
         "base_url": args.base_url,
