@@ -14,7 +14,7 @@ export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}"
 export DEEPSEEK_API_BASE="${DEEPSEEK_API_BASE:-https://api.deepseek.com}"
 export DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-deepseek-chat}"
 export EVAL_MODEL_TAG="${EVAL_MODEL_TAG:-deepseek_hyp}"
-export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-generic}"
+export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-deepseek}"
 
 if [[ -z "${DEEPSEEK_API_KEY}" ]]; then
   echo "请设置 DEEPSEEK_API_KEY" >&2

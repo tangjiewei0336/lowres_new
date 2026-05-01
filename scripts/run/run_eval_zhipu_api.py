@@ -127,8 +127,8 @@ def main() -> int:
     parser.add_argument(
         "--model",
         type=str,
-        default=os.environ.get("ZHIPU_MODEL", "glm-5.1"),
-        help="智谱模型名，例如 glm-5.1。",
+        default=os.environ.get("ZHIPU_MODEL", "glm-4.7"),
+        help="智谱模型名，例如 glm-4.7。",
     )
     parser.add_argument(
         "--model-tag",

@@ -14,7 +14,7 @@ export QWEN_API_KEY="${QWEN_API_KEY:-}"
 export QWEN_API_BASE="${QWEN_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
 export QWEN_MODEL="${QWEN_MODEL:-qwen-plus}"
 export EVAL_MODEL_TAG="${EVAL_MODEL_TAG:-qwen_hyp}"
-export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-generic}"
+export EVAL_MODEL_FAMILY="${EVAL_MODEL_FAMILY:-qwen}"
 
 if [[ -z "${QWEN_API_KEY}" ]]; then
   echo "请设置 QWEN_API_KEY" >&2

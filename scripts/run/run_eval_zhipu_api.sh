@@ -9,8 +9,8 @@ ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT}"
 
 export ZHIPU_API_KEY="${ZHIPU_API_KEY:-}"
-export ZHIPU_MODEL="${ZHIPU_MODEL:-glm-5.1}"
-export EVAL_MODEL_TAG="${EVAL_MODEL_TAG:-zhipu_glm_5_1_flores}"
+export ZHIPU_MODEL="${ZHIPU_MODEL:-glm-4.7}"
+export EVAL_MODEL_TAG="${EVAL_MODEL_TAG:-zhipu_glm_4_7_flores}"
 
 if [[ -z "${ZHIPU_API_KEY}" ]]; then
   echo "请设置 ZHIPU_API_KEY" >&2

@@ -96,6 +96,73 @@ def mt_user_content(src_lang: str, tgt_lang: str, text: str) -> str:
     return f"{english_translation_instruction(src_lang, tgt_lang)}\n\n{text}"
 
 
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", flags=re.DOTALL | re.IGNORECASE)
+
+
+def _flatten_message_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+                    continue
+                inner = item.get("content")
+                if isinstance(inner, str):
+                    parts.append(inner)
+        return "".join(parts)
+    if isinstance(content, dict):
+        text = content.get("text")
+        if isinstance(text, str):
+            return text
+        inner = content.get("content")
+        if isinstance(inner, str):
+            return inner
+    return str(content)
+
+
+def strip_think_tags(text: str) -> str:
+    return _THINK_TAG_RE.sub("", text or "").strip()
+
+
+def extract_message_text(message: Any) -> str:
+    if message is None:
+        return ""
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    return strip_think_tags(_flatten_message_content(content))
+
+
+def debug_message_summary(message: Any) -> dict[str, Any]:
+    if message is None:
+        return {"message_type": None, "content_preview": "", "reasoning_preview": ""}
+    raw_content = getattr(message, "content", None)
+    if raw_content is None and isinstance(message, dict):
+        raw_content = message.get("content")
+    reasoning = getattr(message, "reasoning", None)
+    if reasoning is None and isinstance(message, dict):
+        reasoning = message.get("reasoning")
+    reasoning_details = getattr(message, "reasoning_details", None)
+    if reasoning_details is None and isinstance(message, dict):
+        reasoning_details = message.get("reasoning_details")
+    return {
+        "message_type": type(message).__name__,
+        "content_type": type(raw_content).__name__ if raw_content is not None else None,
+        "content_preview": _flatten_message_content(raw_content)[:200],
+        "reasoning_preview": _flatten_message_content(reasoning)[:200],
+        "reasoning_details_preview": _flatten_message_content(reasoning_details)[:200],
+    }
+
+
 def _tgt_lang_from_eval_pair(eval_pair: str) -> str:
     if "->" not in eval_pair:
         return ""
@@ -255,6 +322,13 @@ def build_extra_body(model_family: str) -> dict[str, Any] | None:
     if fam in ("qwen3", "qwen", "qwen3-4b"):
         # 与 vLLM --default-chat-template-kwargs 一致：关闭 Qwen3 思考链，仅输出译文
         return {"chat_template_kwargs": {"enable_thinking": False}}
+    if fam in ("zhipu", "glm", "glm4", "glm5"):
+        return {"thinking": {"type": "disabled"}}
+    if fam in ("deepseek",):
+        return {"thinking": {"type": "disabled"}}
+    if fam in ("minimax", "m2", "m2.7"):
+        # 将思考内容从正文中拆出，避免 content 中混入 <think>...</think>
+        return {"reasoning_split": True}
     return None
 
 
@@ -455,7 +529,10 @@ def call_translate(
         kwargs["extra_body"] = extra
     resp = client.chat.completions.create(**kwargs)
     choice = resp.choices[0]
-    out = (choice.message.content or "").strip()
+    out = extract_message_text(choice.message)
+    if not out:
+        summary = debug_message_summary(choice.message)
+        raise RuntimeError(f"empty translation response: {json.dumps(summary, ensure_ascii=False)}")
     return out
 
 

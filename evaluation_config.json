@@ -1,12 +1,12 @@
 {
   "split": "dev",
   "language_pair_groups": [
-    ["eng_Latn", "zho_Hans"],
-    ["eng_Latn", "zho_Hans", "spa_Latn", "ind_Latn", "vie_Latn", "tha_Thai", "tgl_Latn"]
+    ["zho_Hans"],
+    ["spa_Latn", "tha_Thai"]
   ],
   "bidirectional": true,
   "limit": null,
-  "per_pair_limit": 200,
+  "per_pair_limit": 2,
   "seed": null,
   "replicates": 1,
   "metrics": ["bleu", "comet"],
