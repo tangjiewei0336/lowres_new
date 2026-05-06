@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -98,6 +99,12 @@ async def main_async() -> int:
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--debug", action="store_true", default=False, help="打印每条样本组装后的提示词。")
+    ap.add_argument(
+        "--log-llm-output",
+        action="store_true",
+        default=os.environ.get("AGENT_LOG_LLM_OUTPUT", "").lower() in ("1", "true", "yes", "on"),
+        help="打印每次大模型原始输出（content/tool_calls/finish_reason）到 stderr。",
+    )
     ap.add_argument("--comet-batch-size", type=int, default=8)
     ap.add_argument("--comet-model", default="models/Unbabel_wmt22-comet-da")
     ap.add_argument("--bleu-tokenize", choices=("auto", "flores200", "legacy"), default="auto")
@@ -172,6 +179,7 @@ async def main_async() -> int:
         max_tokens=int(args.max_tokens),
         temperature=float(args.temperature),
         debug=bool(args.debug),
+        log_llm_output=bool(args.log_llm_output),
     ) as runtime:
         for it in tqdm(pending_items, total=len(pending_items), desc="translate"):
             hyp = await runtime.translate(

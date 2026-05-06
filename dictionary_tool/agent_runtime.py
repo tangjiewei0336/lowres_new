@@ -108,6 +108,7 @@ class LangGraphDictionaryAgentRuntime:
         max_tokens: int = 512,
         temperature: float = 0.0,
         debug: bool = False,
+        log_llm_output: bool = False,
     ) -> None:
         self.model = model
         self.model_family = model_family
@@ -117,6 +118,7 @@ class LangGraphDictionaryAgentRuntime:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.debug = debug
+        self.log_llm_output = log_llm_output
         self._client = None
         self._tools = build_openai_tools()
         self._supported_pairs_hint: str | None = None
@@ -167,12 +169,38 @@ class LangGraphDictionaryAgentRuntime:
             print("=== DEBUG PROMPT END ===", file=sys.stderr)
         return messages
 
+    def _log_llm_message(self, *, stage: str, round_index: int, message: Any, finish_reason: str | None) -> None:
+        if not self.log_llm_output:
+            return
+        tool_calls: list[dict[str, Any]] = []
+        for tc in getattr(message, "tool_calls", None) or []:
+            tool_calls.append(
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments or "{}",
+                    },
+                }
+            )
+        payload = {
+            "stage": stage,
+            "round": round_index,
+            "finish_reason": finish_reason,
+            "content": getattr(message, "content", None) or "",
+            "tool_calls": tool_calls,
+        }
+        print("=== LLM OUTPUT START ===", file=sys.stderr)
+        print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
+        print("=== LLM OUTPUT END ===", file=sys.stderr)
+
     async def translate(self, *, text: str, src_lang: str, tgt_lang: str) -> str:
         if self._client is None or self._dispatcher is None:
             raise RuntimeError("Agent runtime is not initialized.")
         messages = self._build_messages(text=text, src_lang=src_lang, tgt_lang=tgt_lang)
         extra = build_extra_body(self.model_family)
-        for _ in range(MAX_TOOL_CALLING_ROUNDS):
+        for round_index in range(1, MAX_TOOL_CALLING_ROUNDS + 1):
             req: dict[str, Any] = {
                 "model": self.model,
                 "messages": messages,
@@ -184,7 +212,14 @@ class LangGraphDictionaryAgentRuntime:
             if extra:
                 req["extra_body"] = extra
             response = self._client.chat.completions.create(**req)
-            msg = response.choices[0].message
+            choice = response.choices[0]
+            msg = choice.message
+            self._log_llm_message(
+                stage="tool_loop",
+                round_index=round_index,
+                message=msg,
+                finish_reason=getattr(choice, "finish_reason", None),
+            )
 
             assistant_message: dict[str, Any] = {
                 "role": "assistant",
@@ -281,7 +316,14 @@ class LangGraphDictionaryAgentRuntime:
         if extra:
             final_req["extra_body"] = extra
         response = self._client.chat.completions.create(**final_req)
-        msg = response.choices[0].message
+        choice = response.choices[0]
+        msg = choice.message
+        self._log_llm_message(
+            stage="final_answer",
+            round_index=MAX_TOOL_CALLING_ROUNDS + 1,
+            message=msg,
+            finish_reason=getattr(choice, "finish_reason", None),
+        )
         if not msg.tool_calls:
             final_text = (msg.content or "").strip()
             parsed_final = extract_final_translation_from_text(final_text)

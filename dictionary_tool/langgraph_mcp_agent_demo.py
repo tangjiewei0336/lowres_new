@@ -29,6 +29,12 @@ async def main_async() -> int:
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--debug", action="store_true", default=False, help="打印组装后的提示词。")
+    ap.add_argument(
+        "--log-llm-output",
+        action="store_true",
+        default=os.environ.get("AGENT_LOG_LLM_OUTPUT", "").lower() in ("1", "true", "yes", "on"),
+        help="打印每次大模型原始输出（content/tool_calls/finish_reason）到 stderr。",
+    )
     args = ap.parse_args()
     async with LangGraphDictionaryAgentRuntime(
         model=args.model,
@@ -39,6 +45,7 @@ async def main_async() -> int:
         max_tokens=int(args.max_tokens),
         temperature=float(args.temperature),
         debug=bool(args.debug),
+        log_llm_output=bool(args.log_llm_output),
     ) as runtime:
         print(await runtime.translate(text=args.text, src_lang=args.src_lang, tgt_lang=args.tgt_lang))
         return 0
