@@ -32,6 +32,11 @@ def read_items_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def append_jsonl(path: Path, row: dict) -> None:
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def normalize_eval_item(item: dict) -> dict:
     out = dict(item)
     if not out.get("eval_corpus") and out.get("dataset"):
@@ -150,26 +155,44 @@ async def main_async() -> int:
     run_dir = args.output_run_dir or (base_out / f"{args.model_tag}_{int(time.time())}")
     run_dir.mkdir(parents=True, exist_ok=True)
     hyp_path = run_dir / "hypotheses.jsonl"
+    failed_path = run_dir / "failed_items.jsonl"
 
     existing_results: list[dict] = []
     existing_by_key: dict[tuple, dict] = {}
+    existing_failures: list[dict] = []
+    failed_by_key: dict[tuple, dict] = {}
     pending_items = list(items)
     if args.resume and hyp_path.is_file():
         try:
             existing_results = eval_common.load_hypotheses_jsonl(hyp_path)
             existing_by_key = {result_key(r): r for r in existing_results}
-            pending_items = [it for it in items if result_key(it) not in existing_by_key]
-            print(
-                f"resume: found {len(existing_results)} existing hypotheses, remaining {len(pending_items)} samples",
-                file=sys.stderr,
-            )
         except Exception as e:
             print(f"resume: failed to read existing hypotheses, start fresh: {e}", file=sys.stderr)
             existing_results = []
             existing_by_key = {}
-            pending_items = list(items)
+    if args.resume and failed_path.is_file():
+        try:
+            existing_failures = read_items_jsonl(failed_path)
+            failed_by_key = {result_key(r): r for r in existing_failures}
+        except Exception as e:
+            print(f"resume: failed to read existing failures, ignoring failed_items.jsonl: {e}", file=sys.stderr)
+            existing_failures = []
+            failed_by_key = {}
+    if args.resume:
+        pending_items = [
+            it
+            for it in items
+            if result_key(it) not in existing_by_key and result_key(it) not in failed_by_key
+        ]
+        print(
+            "resume: found "
+            f"{len(existing_results)} existing hypotheses, {len(existing_failures)} existing failures, "
+            f"remaining {len(pending_items)} samples",
+            file=sys.stderr,
+        )
 
     new_results: list[dict] = []
+    new_failures: list[dict] = []
     async with LangGraphDictionaryAgentRuntime(
         model=args.model,
         model_family=args.model_family,
@@ -182,11 +205,25 @@ async def main_async() -> int:
         log_llm_output=bool(args.log_llm_output),
     ) as runtime:
         for it in tqdm(pending_items, total=len(pending_items), desc="translate"):
-            hyp = await runtime.translate(
-                text=str(it["source_text"]),
-                src_lang=str(it["src_lang"]),
-                tgt_lang=str(it["tgt_lang"]),
-            )
+            try:
+                hyp = await runtime.translate(
+                    text=str(it["source_text"]),
+                    src_lang=str(it["src_lang"]),
+                    tgt_lang=str(it["tgt_lang"]),
+                )
+            except Exception as e:
+                failure = {
+                    **it,
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                }
+                new_failures.append(failure)
+                append_jsonl(failed_path, failure)
+                print(
+                    f"skip failed sample {result_key(it)}: {type(e).__name__}: {e}",
+                    file=sys.stderr,
+                )
+                continue
             new_results.append({**it, "hypothesis": hyp})
             if len(new_results) % 20 == 0:
                 merged = list(existing_results) + list(new_results)
@@ -199,6 +236,7 @@ async def main_async() -> int:
 
     by_key = {result_key(r): r for r in merged}
     results = [by_key[result_key(it)] for it in items if result_key(it) in by_key]
+    failures = list(existing_failures) + list(new_failures)
 
     meta = {
         "provider": "dictionary_tool_agent",
@@ -211,9 +249,21 @@ async def main_async() -> int:
         "eval_config": str(args.eval_config),
         "corpus": args.corpus,
         "resume": bool(args.resume),
+        "num_failed": len(failures),
+        "failed_items": str(failed_path),
     }
     with open(run_dir / "generation_meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    if failures:
+        failures.sort(key=result_key)
+        with open(failed_path, "w", encoding="utf-8") as f:
+            for row in failures:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    if not results:
+        print(f"没有成功生成的 hypotheses；失败 {len(failures)} 条。跳过 metrics。", file=sys.stderr)
+        return 1
 
     flores200_spm_model = args.flores200_spm_model if args.flores200_spm_model.is_file() else None
     write_metrics(
