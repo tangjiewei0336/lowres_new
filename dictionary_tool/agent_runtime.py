@@ -18,6 +18,11 @@ from tool_registry import (
 
 MAX_TOOL_CALLING_ROUNDS = 8
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
+_TOOL_CALL_BLOCK_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", flags=re.DOTALL | re.IGNORECASE)
+_FINAL_TRANSLATION_CALL_RE = re.compile(
+    r"final_translation\s*\(\s*translation\s*=\s*(.*?)\s*\)\s*$",
+    flags=re.DOTALL | re.IGNORECASE,
+)
 
 
 def _parse_json_maybe(text: str) -> Any:
@@ -70,7 +75,77 @@ def _extract_final_translation_from_obj(obj: Any) -> str | None:
     return None
 
 
+def _strip_wrapping_quotes(text: str) -> str:
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+        return text[1:-1].strip()
+    return text
+
+
+def _tool_call_from_obj(obj: Any) -> list[dict[str, Any]]:
+    if isinstance(obj, list):
+        calls: list[dict[str, Any]] = []
+        for item in obj:
+            calls.extend(_tool_call_from_obj(item))
+        return calls
+    if not isinstance(obj, dict):
+        return []
+
+    name = obj.get("name")
+    args = obj.get("arguments")
+    function = obj.get("function")
+    if isinstance(function, dict):
+        name = function.get("name", name)
+        args = function.get("arguments", args)
+
+    if isinstance(args, str):
+        parsed_args = _parse_json_maybe(args)
+        if parsed_args is not None:
+            args = parsed_args
+
+    if isinstance(name, str):
+        return [{"name": name, "arguments": args if isinstance(args, dict) else {}}]
+
+    calls: list[dict[str, Any]] = []
+    for value in obj.values():
+        calls.extend(_tool_call_from_obj(value))
+    return calls
+
+
+def extract_text_tool_calls(text: str) -> list[dict[str, Any]]:
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    calls: list[dict[str, Any]] = []
+    for block in _TOOL_CALL_BLOCK_RE.findall(text):
+        obj = _parse_json_maybe(block)
+        if obj is not None:
+            calls.extend(_tool_call_from_obj(obj))
+
+    if not calls:
+        obj = _parse_json_maybe(text)
+        if obj is not None:
+            calls.extend(_tool_call_from_obj(obj))
+
+    final_match = _FINAL_TRANSLATION_CALL_RE.search(text)
+    if final_match:
+        calls.append(
+            {
+                "name": FINAL_TRANSLATION_TOOL_NAME,
+                "arguments": {"translation": _strip_wrapping_quotes(final_match.group(1))},
+            }
+        )
+    return calls
+
+
 def extract_final_translation_from_text(text: str) -> str | None:
+    for call in extract_text_tool_calls(text):
+        if call.get("name") == FINAL_TRANSLATION_TOOL_NAME:
+            translation = str(call.get("arguments", {}).get("translation", "")).strip()
+            if translation:
+                return translation
+
     obj = _parse_json_maybe(text)
     if obj is not None:
         found = _extract_final_translation_from_obj(obj)
@@ -195,6 +270,35 @@ class LangGraphDictionaryAgentRuntime:
         print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
         print("=== LLM OUTPUT END ===", file=sys.stderr)
 
+    def _run_text_tool_calls(self, calls: list[dict[str, Any]]) -> tuple[str | None, list[dict[str, Any]]]:
+        if self._dispatcher is None:
+            raise RuntimeError("Agent runtime is not initialized.")
+        tool_results: list[dict[str, Any]] = []
+        for call in calls:
+            tool_name = str(call.get("name", ""))
+            args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+            if tool_name == FINAL_TRANSLATION_TOOL_NAME:
+                translation = str(args.get("translation", "")).strip()
+                if translation:
+                    return translation, tool_results
+                tool_results.append(
+                    {
+                        "name": tool_name,
+                        "arguments": args,
+                        "output": {"error": "final_translation requires a non-empty translation argument."},
+                    }
+                )
+                continue
+            if tool_name not in self._dispatcher:
+                tool_output: Any = {"error": f"Unknown tool: {tool_name}"}
+            else:
+                try:
+                    tool_output = self._dispatcher[tool_name](**args)
+                except Exception as e:
+                    tool_output = {"error": str(e)}
+            tool_results.append({"name": tool_name, "arguments": args, "output": tool_output})
+        return None, tool_results
+
     async def translate(self, *, text: str, src_lang: str, tgt_lang: str) -> str:
         if self._client is None or self._dispatcher is None:
             raise RuntimeError("Agent runtime is not initialized.")
@@ -244,6 +348,24 @@ class LangGraphDictionaryAgentRuntime:
                 final_translation = extract_final_translation_from_text(content)
                 if final_translation:
                     return final_translation
+                text_tool_calls = extract_text_tool_calls(content)
+                if text_tool_calls:
+                    text_final, text_tool_results = self._run_text_tool_calls(text_tool_calls)
+                    if text_final:
+                        return text_final
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "The previous message contained tool calls as text instead of structured "
+                                "tool_calls. I executed those local tools. Tool results:\n"
+                                f"{json.dumps(text_tool_results, ensure_ascii=False)}\n\n"
+                                "Continue from these tool results. If the final translation is ready, call "
+                                "final_translation(translation=...)."
+                            ),
+                        }
+                    )
+                    continue
                 if content and not looks_like_tool_call_text(content):
                     return content
                 messages.append(
