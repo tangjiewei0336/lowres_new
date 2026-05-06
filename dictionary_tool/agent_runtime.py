@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,83 @@ from tool_registry import (
 
 
 MAX_TOOL_CALLING_ROUNDS = 8
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
+
+
+def _parse_json_maybe(text: str) -> Any:
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = _JSON_OBJECT_RE.search(text)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def _extract_final_translation_from_obj(obj: Any) -> str | None:
+    if isinstance(obj, list):
+        for item in obj:
+            found = _extract_final_translation_from_obj(item)
+            if found:
+                return found
+        return None
+    if not isinstance(obj, dict):
+        return None
+
+    name = obj.get("name")
+    args = obj.get("arguments")
+    function = obj.get("function")
+    if isinstance(function, dict):
+        name = function.get("name", name)
+        args = function.get("arguments", args)
+
+    if isinstance(args, str):
+        parsed_args = _parse_json_maybe(args)
+        if parsed_args is not None:
+            args = parsed_args
+
+    if name == FINAL_TRANSLATION_TOOL_NAME and isinstance(args, dict):
+        translation = str(args.get("translation", "")).strip()
+        return translation or None
+
+    for value in obj.values():
+        found = _extract_final_translation_from_obj(value)
+        if found:
+            return found
+    return None
+
+
+def extract_final_translation_from_text(text: str) -> str | None:
+    obj = _parse_json_maybe(text)
+    if obj is not None:
+        found = _extract_final_translation_from_obj(obj)
+        if found:
+            return found
+    return None
+
+
+def looks_like_tool_call_text(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "<tool_call",
+            "</tool_call",
+            '"tool_calls"',
+            '"function"',
+            '"arguments"',
+            '"lookup_dictionary"',
+            f'"{FINAL_TRANSLATION_TOOL_NAME}"',
+            FINAL_TRANSLATION_TOOL_NAME,
+        )
+    )
 
 
 class LangGraphDictionaryAgentRuntime:
@@ -127,7 +205,23 @@ class LangGraphDictionaryAgentRuntime:
             messages.append(assistant_message)
 
             if not msg.tool_calls:
-                return (msg.content or "").strip()
+                content = (msg.content or "").strip()
+                final_translation = extract_final_translation_from_text(content)
+                if final_translation:
+                    return final_translation
+                if content and not looks_like_tool_call_text(content):
+                    return content
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous message contained tool-call markup instead of the final translation. "
+                            "Do not output tool-call markup as text. Call final_translation(translation=...) "
+                            "with the final translated text only."
+                        ),
+                    }
+                )
+                break
 
             for tc in msg.tool_calls:
                 tool_name = tc.function.name
@@ -190,7 +284,12 @@ class LangGraphDictionaryAgentRuntime:
         msg = response.choices[0].message
         if not msg.tool_calls:
             final_text = (msg.content or "").strip()
+            parsed_final = extract_final_translation_from_text(final_text)
+            if parsed_final:
+                return parsed_final
             if final_text:
+                if looks_like_tool_call_text(final_text):
+                    raise RuntimeError("Final-answer round returned tool-call markup instead of final text.")
                 return final_text
             raise RuntimeError("Final-answer round returned no content.")
 
