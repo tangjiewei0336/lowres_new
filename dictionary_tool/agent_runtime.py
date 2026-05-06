@@ -7,7 +7,15 @@ from typing import Any
 
 from agent_prompt import build_translation_messages
 from llm import build_extra_body, create_client
-from tool_registry import build_local_dispatcher, build_openai_tools
+from tool_registry import (
+    FINAL_TRANSLATION_TOOL_NAME,
+    build_final_translation_tools,
+    build_local_dispatcher,
+    build_openai_tools,
+)
+
+
+MAX_TOOL_CALLING_ROUNDS = 8
 
 
 class LangGraphDictionaryAgentRuntime:
@@ -86,7 +94,7 @@ class LangGraphDictionaryAgentRuntime:
             raise RuntimeError("Agent runtime is not initialized.")
         messages = self._build_messages(text=text, src_lang=src_lang, tgt_lang=tgt_lang)
         extra = build_extra_body(self.model_family)
-        for _ in range(8):
+        for _ in range(MAX_TOOL_CALLING_ROUNDS):
             req: dict[str, Any] = {
                 "model": self.model,
                 "messages": messages,
@@ -127,6 +135,20 @@ class LangGraphDictionaryAgentRuntime:
                     args = json.loads(tc.function.arguments or "{}")
                 except json.JSONDecodeError:
                     args = {}
+                if tool_name == FINAL_TRANSLATION_TOOL_NAME:
+                    translation = str(args.get("translation", "")).strip()
+                    if translation:
+                        return translation
+                    tool_output = {"error": "final_translation requires a non-empty translation argument."}
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "name": tool_name,
+                            "content": json.dumps(tool_output, ensure_ascii=False),
+                        }
+                    )
+                    continue
                 if tool_name not in self._dispatcher:
                     tool_output: Any = {"error": f"Unknown tool: {tool_name}"}
                 else:
@@ -142,4 +164,44 @@ class LangGraphDictionaryAgentRuntime:
                         "content": json.dumps(tool_output, ensure_ascii=False),
                     }
                 )
-        raise RuntimeError("Tool-calling loop exceeded max rounds without final answer.")
+
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Dictionary lookup round limit reached. Do not call lookup_dictionary again. "
+                    "You must now provide the best final translation based on the source text and "
+                    "the dictionary evidence already available. Call final_translation(translation=...) "
+                    "with the final translated text only."
+                ),
+            }
+        )
+        final_req: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "tools": build_final_translation_tools(),
+            "tool_choice": "auto",
+            "temperature": float(self.temperature),
+            "max_tokens": int(self.max_tokens),
+        }
+        if extra:
+            final_req["extra_body"] = extra
+        response = self._client.chat.completions.create(**final_req)
+        msg = response.choices[0].message
+        if not msg.tool_calls:
+            final_text = (msg.content or "").strip()
+            if final_text:
+                return final_text
+            raise RuntimeError("Final-answer round returned no content.")
+
+        for tc in msg.tool_calls:
+            if tc.function.name != FINAL_TRANSLATION_TOOL_NAME:
+                continue
+            try:
+                args = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            translation = str(args.get("translation", "")).strip()
+            if translation:
+                return translation
+        raise RuntimeError("Final-answer round did not provide final_translation.")

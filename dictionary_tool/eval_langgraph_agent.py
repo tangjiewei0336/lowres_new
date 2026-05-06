@@ -31,6 +31,36 @@ def read_items_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def normalize_eval_item(item: dict) -> dict:
+    out = dict(item)
+    if not out.get("eval_corpus") and out.get("dataset"):
+        out["eval_corpus"] = out["dataset"]
+    if not out.get("eval_pair") and out.get("src_lang") and out.get("tgt_lang"):
+        out["eval_pair"] = f"{out['src_lang']}->{out['tgt_lang']}"
+    return out
+
+
+def read_manifest_items(manifest: dict) -> list[dict]:
+    items_path = repo_root() / manifest["items_jsonl"]
+    if not items_path.is_file():
+        raise FileNotFoundError(f"未找到 items_jsonl: {items_path}")
+    items = read_items_jsonl(items_path)
+    if items:
+        return [normalize_eval_item(it) for it in items]
+
+    split = str(manifest.get("split") or "dev")
+    fallback_paths = sorted((repo_root() / "datasets" / "processed").glob(f"flores_{split}_*__*.jsonl"))
+    fallback_items: list[dict] = []
+    for path in fallback_paths:
+        fallback_items.extend(read_items_jsonl(path))
+    if fallback_items:
+        print(
+            f"items_jsonl 为空，已从 {len(fallback_paths)} 个 FLORES 分语向文件读取 {len(fallback_items)} 条。",
+            file=sys.stderr,
+        )
+    return [normalize_eval_item(it) for it in fallback_items]
+
+
 def result_key(x: dict) -> tuple:
     return (
         x.get("eval_corpus", x.get("dataset", "")),
@@ -93,14 +123,18 @@ async def main_async() -> int:
     eval_common.configure_offline_transformers(args.comet_encoder_model, bool(args.offline_eval_assets))
     eval_cfg = load_json(args.eval_config)
     manifest = load_json(args.manifest)
-    items_path = repo_root() / manifest["items_jsonl"]
-    if not items_path.is_file():
-        print(f"未找到 items_jsonl: {items_path}", file=sys.stderr)
+    try:
+        items = read_manifest_items(manifest)
+    except FileNotFoundError as e:
+        print(str(e), file=sys.stderr)
         return 1
-    items = read_items_jsonl(items_path)
     corpus = str(args.corpus).strip().lower()
     if corpus:
-        items = [it for it in items if str(it.get("eval_corpus", "")).strip().lower() == corpus]
+        items = [
+            it
+            for it in items
+            if str(it.get("eval_corpus", it.get("dataset", ""))).strip().lower() == corpus
+        ]
     if not items:
         print(f"评估条目为空（corpus={args.corpus}）。", file=sys.stderr)
         return 1

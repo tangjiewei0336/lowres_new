@@ -20,6 +20,7 @@ usage() {
 配置名:
   qwen3, qwen3-4b           Qwen3-4B 基座（关闭 thinking）
   qwen3-8b                  Qwen3-8B 基座（关闭 thinking）
+  qwen3-8b-tool             Qwen3-8B 基座（关闭 thinking，启用 tool calling）
   qwen3-8b-moe              Qwen3-8B + pair-level LoRA MoE adapters
   qwen3-8b-single-sft       Qwen3-8B + all-directions single SFT LoRA
   qwen3-instruct-2507       Qwen3-4B-Instruct-2507
@@ -30,6 +31,7 @@ usage() {
 示例:
   bash scripts/serve/run.sh qwen3-4b
   bash scripts/serve/run.sh qwen3-8b
+  bash scripts/serve/run.sh qwen3-8b-tool
   bash scripts/serve/run.sh qwen3-8b-moe
   bash scripts/serve/run.sh qwen3-8b-single-sft
   TENSOR_PARALLEL_SIZE=4 bash scripts/serve/run.sh qwen3.5-27b-instruct
@@ -49,6 +51,9 @@ case "${1}" in
     ;;
   qwen3-8b|qwen38b)
     exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_8b.sh"
+    ;;
+  qwen3-8b-tool|qwen3-8b-tool-calling|qwen38b-tool|qwen38b-tool-calling)
+    exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_8b_tool_calling.sh"
     ;;
   qwen3-8b-moe|qwen38b-moe|moe-qwen3-8b)
     exec bash "${SCRIPT_DIR}/serve_vllm_qwen3_8b_moe_lora.sh"

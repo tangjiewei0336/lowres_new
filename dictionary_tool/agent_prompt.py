@@ -22,14 +22,14 @@ Tool-use policy:
 3. Then produce the final translation yourself based on source text and any dictionary evidence.
 4. Never invent dictionary results. Use tool outputs as they are.
 5. Prefer the exact src_lang and tgt_lang provided by the user when calling tools.
-6. Return the final translation only unless the user explicitly asks for analysis.
+6. When the final translation is ready, call `final_translation(translation=...)`.
+7. The `translation` argument must contain the final translation only, with no analysis or tool-call markup.
 
 Recommended workflow:
 - Understand src_lang, tgt_lang, and text.
 - Optionally call `lookup_dictionary(src_lang, tgt_lang, term, top_k, offset)` for key terms.
 - If lookup has no direct hit, check its fallback_results (auto suggestions from other pairs/languages).
-- Produce the translation directly in your final answer.
-- Return only the final translation.
+- Call `final_translation(translation=...)` with the final translated text.
 """
 
 

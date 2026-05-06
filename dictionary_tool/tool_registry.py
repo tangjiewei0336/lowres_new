@@ -7,6 +7,9 @@ from typing import Any, Callable
 from core import get_index
 
 
+FINAL_TRANSLATION_TOOL_NAME = "final_translation"
+
+
 def _index(lexicon_dir: Path):
     return get_index(str(lexicon_dir))
 
@@ -69,6 +72,33 @@ def lookup_dictionary(
     return primary
 
 
+def build_final_translation_tool() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": FINAL_TRANSLATION_TOOL_NAME,
+            "description": (
+                "Submit the final translation after using dictionary evidence when useful. "
+                "Call this exactly once when the final answer is ready."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "translation": {
+                        "type": "string",
+                        "description": "The final translated text only, with no analysis or tool-call markup.",
+                    },
+                },
+                "required": ["translation"],
+            },
+        },
+    }
+
+
+def build_final_translation_tools() -> list[dict[str, Any]]:
+    return [build_final_translation_tool()]
+
+
 def build_openai_tools(*, supported_pairs_hint: str | None = None) -> list[dict[str, Any]]:
     pair_suffix = f" Supported dictionary pairs: {supported_pairs_hint}" if supported_pairs_hint else ""
     return [
@@ -97,6 +127,7 @@ def build_openai_tools(*, supported_pairs_hint: str | None = None) -> list[dict[
                 },
             },
         },
+        build_final_translation_tool(),
     ]
 
 

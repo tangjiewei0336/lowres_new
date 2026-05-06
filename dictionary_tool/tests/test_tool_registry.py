@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tool_registry import lookup_dictionary
+from tool_registry import (
+    FINAL_TRANSLATION_TOOL_NAME,
+    build_final_translation_tools,
+    build_openai_tools,
+    lookup_dictionary,
+)
 
 
 def fixture_dir() -> Path:
@@ -25,3 +30,15 @@ def test_lookup_dictionary_with_fallback_from_other_sources() -> None:
     assert out["fallback_used"] is True
     assert out["fallback_scope"] in {"same_src_other_targets", "other_sources"}
     assert out["fallback_results"]
+
+
+def test_openai_tools_include_final_translation_tool() -> None:
+    tools = build_openai_tools()
+    names = [tool["function"]["name"] for tool in tools]
+    assert "lookup_dictionary" in names
+    assert FINAL_TRANSLATION_TOOL_NAME in names
+
+
+def test_final_translation_tools_only_include_final_tool() -> None:
+    tools = build_final_translation_tools()
+    assert [tool["function"]["name"] for tool in tools] == [FINAL_TRANSLATION_TOOL_NAME]
