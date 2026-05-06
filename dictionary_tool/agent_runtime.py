@@ -17,6 +17,9 @@ from tool_registry import (
 
 
 MAX_TOOL_CALLING_ROUNDS = 5
+_ANSI_BLUE = "\033[34m"
+_ANSI_GREEN = "\033[32m"
+_ANSI_RESET = "\033[0m"
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
 _TOOL_CALL_BLOCK_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", flags=re.DOTALL | re.IGNORECASE)
 _FINAL_TRANSLATION_CALL_RE = re.compile(
@@ -171,6 +174,10 @@ def looks_like_tool_call_text(text: str) -> bool:
     )
 
 
+def _colored(text: str, color: str) -> str:
+    return f"{color}{text}{_ANSI_RESET}"
+
+
 class LangGraphDictionaryAgentRuntime:
     def __init__(
         self,
@@ -266,11 +273,37 @@ class LangGraphDictionaryAgentRuntime:
             "content": getattr(message, "content", None) or "",
             "tool_calls": tool_calls,
         }
-        print("=== LLM OUTPUT START ===", file=sys.stderr)
+        print(_colored("=== LLM OUTPUT START ===", _ANSI_BLUE), file=sys.stderr)
         print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
-        print("=== LLM OUTPUT END ===", file=sys.stderr)
+        print(_colored("=== LLM OUTPUT END ===", _ANSI_BLUE), file=sys.stderr)
 
-    def _run_text_tool_calls(self, calls: list[dict[str, Any]]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _log_tool_result(
+        self,
+        *,
+        stage: str,
+        round_index: int,
+        tool_call_id: str | None,
+        tool_name: str,
+        arguments: dict[str, Any],
+        output: Any,
+    ) -> None:
+        if not self.log_llm_output:
+            return
+        payload = {
+            "stage": stage,
+            "round": round_index,
+            "tool_call_id": tool_call_id,
+            "name": tool_name,
+            "arguments": arguments,
+            "output": output,
+        }
+        print(_colored("=== TOOL RESULT START ===", _ANSI_GREEN), file=sys.stderr)
+        print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
+        print(_colored("=== TOOL RESULT END ===", _ANSI_GREEN), file=sys.stderr)
+
+    def _run_text_tool_calls(
+        self, calls: list[dict[str, Any]], *, stage: str, round_index: int
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         if self._dispatcher is None:
             raise RuntimeError("Agent runtime is not initialized.")
         tool_results: list[dict[str, Any]] = []
@@ -288,6 +321,14 @@ class LangGraphDictionaryAgentRuntime:
                         "output": {"error": "final_translation requires a non-empty translation argument."},
                     }
                 )
+                self._log_tool_result(
+                    stage=stage,
+                    round_index=round_index,
+                    tool_call_id=None,
+                    tool_name=tool_name,
+                    arguments=args,
+                    output=tool_results[-1]["output"],
+                )
                 continue
             if tool_name not in self._dispatcher:
                 tool_output: Any = {"error": f"Unknown tool: {tool_name}"}
@@ -297,6 +338,14 @@ class LangGraphDictionaryAgentRuntime:
                 except Exception as e:
                     tool_output = {"error": str(e)}
             tool_results.append({"name": tool_name, "arguments": args, "output": tool_output})
+            self._log_tool_result(
+                stage=stage,
+                round_index=round_index,
+                tool_call_id=None,
+                tool_name=tool_name,
+                arguments=args,
+                output=tool_output,
+            )
         return None, tool_results
 
     async def translate(self, *, text: str, src_lang: str, tgt_lang: str) -> str:
@@ -350,7 +399,11 @@ class LangGraphDictionaryAgentRuntime:
                     return final_translation
                 text_tool_calls = extract_text_tool_calls(content)
                 if text_tool_calls:
-                    text_final, text_tool_results = self._run_text_tool_calls(text_tool_calls)
+                    text_final, text_tool_results = self._run_text_tool_calls(
+                        text_tool_calls,
+                        stage="text_tool_call",
+                        round_index=round_index,
+                    )
                     if text_final:
                         return text_final
                     messages.append(
@@ -390,8 +443,24 @@ class LangGraphDictionaryAgentRuntime:
                 if tool_name == FINAL_TRANSLATION_TOOL_NAME:
                     translation = str(args.get("translation", "")).strip()
                     if translation:
+                        self._log_tool_result(
+                            stage="tool_loop",
+                            round_index=round_index,
+                            tool_call_id=tc.id,
+                            tool_name=tool_name,
+                            arguments=args,
+                            output={"translation": translation},
+                        )
                         return translation
                     tool_output = {"error": "final_translation requires a non-empty translation argument."}
+                    self._log_tool_result(
+                        stage="tool_loop",
+                        round_index=round_index,
+                        tool_call_id=tc.id,
+                        tool_name=tool_name,
+                        arguments=args,
+                        output=tool_output,
+                    )
                     messages.append(
                         {
                             "role": "tool",
@@ -408,6 +477,14 @@ class LangGraphDictionaryAgentRuntime:
                         tool_output = self._dispatcher[tool_name](**args)
                     except Exception as e:
                         tool_output = {"error": str(e)}
+                self._log_tool_result(
+                    stage="tool_loop",
+                    round_index=round_index,
+                    tool_call_id=tc.id,
+                    tool_name=tool_name,
+                    arguments=args,
+                    output=tool_output,
+                )
                 messages.append(
                     {
                         "role": "tool",
@@ -467,5 +544,13 @@ class LangGraphDictionaryAgentRuntime:
                 args = {}
             translation = str(args.get("translation", "")).strip()
             if translation:
+                self._log_tool_result(
+                    stage="final_answer",
+                    round_index=MAX_TOOL_CALLING_ROUNDS + 1,
+                    tool_call_id=tc.id,
+                    tool_name=tc.function.name,
+                    arguments=args,
+                    output={"translation": translation},
+                )
                 return translation
         raise RuntimeError("Final-answer round did not provide final_translation.")
