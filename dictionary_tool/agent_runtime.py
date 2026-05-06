@@ -16,7 +16,7 @@ from tool_registry import (
 )
 
 
-MAX_TOOL_CALLING_ROUNDS = 8
+MAX_TOOL_CALLING_ROUNDS = 5
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", flags=re.DOTALL)
 _TOOL_CALL_BLOCK_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", flags=re.DOTALL | re.IGNORECASE)
 _FINAL_TRANSLATION_CALL_RE = re.compile(
@@ -360,8 +360,9 @@ class LangGraphDictionaryAgentRuntime:
                                 "The previous message contained tool calls as text instead of structured "
                                 "tool_calls. I executed those local tools. Tool results:\n"
                                 f"{json.dumps(text_tool_results, ensure_ascii=False)}\n\n"
-                                "Continue from these tool results. If the final translation is ready, call "
-                                "final_translation(translation=...)."
+                                "Continue from these tool results. The final answer must be submitted by "
+                                "calling the final_translation tool. Do not output normal assistant text or "
+                                "tool-call markup as text."
                             ),
                         }
                     )
@@ -373,8 +374,8 @@ class LangGraphDictionaryAgentRuntime:
                         "role": "user",
                         "content": (
                             "Your previous message contained tool-call markup instead of the final translation. "
-                            "Do not output tool-call markup as text. Call final_translation(translation=...) "
-                            "with the final translated text only."
+                            "Do not output tool-call markup or normal assistant text. Submit the final answer "
+                            "by calling the final_translation tool with the final translated text only."
                         ),
                     }
                 )
@@ -422,8 +423,8 @@ class LangGraphDictionaryAgentRuntime:
                 "content": (
                     "Dictionary lookup round limit reached. Do not call lookup_dictionary again. "
                     "You must now provide the best final translation based on the source text and "
-                    "the dictionary evidence already available. Call final_translation(translation=...) "
-                    "with the final translated text only."
+                    "the dictionary evidence already available. Submit the final answer by calling the "
+                    "final_translation tool. Do not output normal assistant text or tool-call markup as text."
                 ),
             }
         )
