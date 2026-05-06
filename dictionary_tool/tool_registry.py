@@ -8,6 +8,7 @@ from core import get_index
 
 
 FINAL_TRANSLATION_TOOL_NAME = "final_translation"
+_OMITTED_OUTPUT_KEYS = {"license_note", "source_url"}
 
 
 def _index(lexicon_dir: Path):
@@ -16,6 +17,18 @@ def _index(lexicon_dir: Path):
 
 def list_dictionary_pairs(*, lexicon_dir: Path) -> list[dict[str, Any]]:
     return _index(lexicon_dir).list_pairs()
+
+
+def strip_omitted_output_fields(value: Any) -> Any:
+    if isinstance(value, list):
+        return [strip_omitted_output_fields(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: strip_omitted_output_fields(item)
+            for key, item in value.items()
+            if key not in _OMITTED_OUTPUT_KEYS
+        }
+    return value
 
 
 def lookup_dictionary(
@@ -48,7 +61,7 @@ def lookup_dictionary(
     )
     if int(primary.get("total_matches", 0)) > 0:
         primary["fallback_used"] = False
-        return primary
+        return strip_omitted_output_fields(primary)
 
     # 先尝试同 src_lang（跨目标语）推荐
     same_src_rows = idx.search_pairs(term=term, src_lang=src_lang, top_k=max(fallback_top_k * 3, fallback_top_k))
@@ -61,7 +74,7 @@ def lookup_dictionary(
         primary["fallback_used"] = True
         primary["fallback_scope"] = "same_src_other_targets"
         primary["fallback_results"] = same_src_recs
-        return primary
+        return strip_omitted_output_fields(primary)
 
     # 同 src_lang 也没命中时，回退到其他 src_lang
     other_rows = idx.search_pairs(term=term, top_k=max(fallback_top_k * 6, fallback_top_k))
@@ -69,7 +82,7 @@ def lookup_dictionary(
     primary["fallback_used"] = bool(other_src_recs)
     primary["fallback_scope"] = "other_sources"
     primary["fallback_results"] = other_src_recs
-    return primary
+    return strip_omitted_output_fields(primary)
 
 
 def build_final_translation_tool() -> dict[str, Any]:
