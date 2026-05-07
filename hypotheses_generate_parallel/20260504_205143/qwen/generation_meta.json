@@ -1,0 +1,9 @@
+{
+  "model": "qwen3.6-max-preview",
+  "model_family": "qwen",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "num_samples": 8396,
+  "num_skipped_safety": 4,
+  "manifest": "E:\\lowres_new-main\\datasets\\eval_manifest.json",
+  "eval_config": "E:\\lowres_new-main\\evaluation_config.json"
+}

@@ -1,0 +1,9 @@
+{
+  "model": "glm-5.1",
+  "model_family": "zhipu",
+  "base_url": "https://open.bigmodel.cn/api/paas/v4",
+  "num_samples": 8393,
+  "num_skipped_safety": 7,
+  "manifest": "E:\\lowres_new-main\\datasets\\eval_manifest.json",
+  "eval_config": "E:\\lowres_new-main\\evaluation_config.json"
+}

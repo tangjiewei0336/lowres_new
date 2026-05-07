@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from core import get_index
+from rare_terms import get_rare_term_index
 
 
 FINAL_TRANSLATION_TOOL_NAME = "final_translation"
@@ -17,6 +18,14 @@ def _index(lexicon_dir: Path):
 
 def list_dictionary_pairs(*, lexicon_dir: Path) -> list[dict[str, Any]]:
     return _index(lexicon_dir).list_pairs()
+
+
+def _rare_index(rare_terms_dir: Path):
+    return get_rare_term_index(str(rare_terms_dir))
+
+
+def list_fineweb_rare_term_languages(*, rare_terms_dir: Path) -> list[dict[str, Any]]:
+    return _rare_index(rare_terms_dir).list_languages()
 
 
 def strip_omitted_output_fields(value: Any) -> Any:
@@ -85,6 +94,22 @@ def lookup_dictionary(
     return strip_omitted_output_fields(primary)
 
 
+def lookup_fineweb_rare_term(
+    *,
+    rare_terms_dir: Path,
+    lang: str,
+    term: str,
+    top_k: int = 10,
+    offset: int = 0,
+) -> dict[str, Any]:
+    return _rare_index(rare_terms_dir).lookup(
+        lang=lang,
+        term=term,
+        top_k=top_k,
+        offset=offset,
+    )
+
+
 def build_final_translation_tool() -> dict[str, Any]:
     return {
         "type": "function",
@@ -140,6 +165,27 @@ def build_openai_tools(*, supported_pairs_hint: str | None = None) -> list[dict[
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_fineweb_rare_term",
+                "description": (
+                    "Lookup rare FineWeb corpus terms with frequency, definitions, example sentences, "
+                    "and sampled contexts. Use this for uncommon words or phrases that may not be in "
+                    "the bilingual dictionary."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lang": {"type": "string"},
+                        "term": {"type": "string"},
+                        "top_k": {"type": "integer", "default": 10},
+                        "offset": {"type": "integer", "default": 0},
+                    },
+                    "required": ["lang", "term"],
+                },
+            },
+        },
         build_final_translation_tool(),
     ]
 
@@ -147,7 +193,9 @@ def build_openai_tools(*, supported_pairs_hint: str | None = None) -> list[dict[
 def build_local_dispatcher(
     *,
     lexicon_dir: Path,
+    rare_terms_dir: Path | None = None,
 ) -> dict[str, Callable[..., Any]]:
+    rare_dir = rare_terms_dir or env_rare_terms_dir()
     return {
         "lookup_dictionary": lambda **kwargs: lookup_dictionary(
             lexicon_dir=lexicon_dir,
@@ -159,6 +207,16 @@ def build_local_dispatcher(
             fallback_top_k=int(kwargs.get("fallback_top_k", 10)),
         ),
         "list_dictionary_pairs": lambda **kwargs: list_dictionary_pairs(lexicon_dir=lexicon_dir),
+        "lookup_fineweb_rare_term": lambda **kwargs: lookup_fineweb_rare_term(
+            rare_terms_dir=rare_dir,
+            lang=str(kwargs["lang"]),
+            term=str(kwargs["term"]),
+            top_k=int(kwargs.get("top_k", 10)),
+            offset=int(kwargs.get("offset", 0)),
+        ),
+        "list_fineweb_rare_term_languages": lambda **kwargs: list_fineweb_rare_term_languages(
+            rare_terms_dir=rare_dir,
+        ),
     }
 
 
@@ -167,3 +225,10 @@ def env_lexicon_dir() -> Path:
     if p:
         return Path(p).resolve()
     return (Path(__file__).resolve().parents[1] / "training" / "data" / "dictionaries" / "moe_lexicon").resolve()
+
+
+def env_rare_terms_dir() -> Path:
+    p = os.environ.get("FINEWEB_RARE_TERMS_DIR")
+    if p:
+        return Path(p).resolve()
+    return (Path(__file__).resolve().parents[1] / "training" / "data" / "dictionaries" / "fineweb_rare_terms").resolve()

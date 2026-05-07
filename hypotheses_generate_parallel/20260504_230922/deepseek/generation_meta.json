@@ -1,0 +1,9 @@
+{
+  "model": "deepseek-v4-pro",
+  "model_family": "deepseek",
+  "base_url": "https://api.deepseek.com",
+  "num_samples": 8400,
+  "num_skipped_safety": 0,
+  "manifest": "E:\\lowres_new-main\\datasets\\eval_manifest.json",
+  "eval_config": "E:\\lowres_new-main\\evaluation_config.json"
+}
