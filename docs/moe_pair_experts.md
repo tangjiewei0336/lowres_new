@@ -105,6 +105,33 @@ conda activate lowres
 bash scripts/run/run_train_moe_experts.sh
 ```
 
+The train script runs experts in parallel and writes one log file per expert:
+
+```text
+logs/moe_train/<YYYYMMDD_HHMMSS>/llamafactory_qwen3_8b_moe_<src>_to_<tgt>.log
+logs/moe_train/<YYYYMMDD_HHMMSS>/summary.tsv
+```
+
+Useful tmux invocation on a 4-GPU machine:
+
+```bash
+tmux new -s moe_train
+GPUS=0,1,2,3 MAX_JOBS=4 GPUS_PER_JOB=1 bash scripts/run/run_train_moe_experts.sh
+```
+
+Follow a single expert log from another tmux pane:
+
+```bash
+tail -f logs/moe_train/<run_ts>/llamafactory_qwen3_8b_moe_eng_Latn_to_vie_Latn.log
+```
+
+Controls:
+
+- `MAX_JOBS`: concurrent expert trainings. Defaults to the number of visible GPUs, or `1` if GPUs cannot be detected.
+- `GPUS`: comma-separated GPU ids to use, for example `0,1,2,3`.
+- `GPUS_PER_JOB`: number of GPUs assigned to each expert job. Defaults to `1`.
+- `LOG_DIR`: custom log directory. Defaults to `logs/moe_train/<run_ts>`.
+
 Each config trains one LoRA adapter and writes it under:
 
 ```text

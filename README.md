@@ -366,6 +366,21 @@ bash scripts/run/run_train_single_sft.sh
 llamafactory-cli train /root/lowres_new/training/llamafactory_qwen3_8b_all_directions_sft_lora.yaml
 ```
 
+训练 pair-level MoE experts 时可以并行跑，并把每个 expert 的日志写到文件：
+
+```bash
+tmux new -s moe_train
+GPUS=0,1,2,3 MAX_JOBS=4 GPUS_PER_JOB=1 bash scripts/run/run_train_moe_experts.sh
+```
+
+默认日志目录：
+
+```text
+logs/moe_train/<YYYYMMDD_HHMMSS>/
+```
+
+tmux 里会显示每个 expert 的启动、完成或失败；详细训练输出看对应 `.log`，整体结果看 `summary.tsv`。
+
 部署这个普通 SFT adapter：
 
 ```bash
