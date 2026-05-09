@@ -169,8 +169,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--steps",
         type=int,
         nargs="+",
-        default=[200, 400, 600, 782],
-        help="Candidate checkpoint steps to consider.",
+        default=None,
+        help="Candidate checkpoint steps to consider (explicit list).",
+    )
+    p.add_argument(
+        "--step-start",
+        type=int,
+        default=None,
+        help="Start step for range mode (requires --step-end and --step-interval).",
+    )
+    p.add_argument(
+        "--step-end",
+        type=int,
+        default=None,
+        help="End step for range mode (requires --step-start and --step-interval).",
+    )
+    p.add_argument(
+        "--step-interval",
+        type=int,
+        default=None,
+        help="Step interval for range mode (requires --step-start and --step-end).",
+    )
+    p.add_argument(
+        "--include-end-step",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="If range mode is used and end is not aligned to interval, also include end step.",
     )
     p.add_argument(
         "--output-manifest",
@@ -193,6 +217,38 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+def resolve_wanted_steps(args: argparse.Namespace) -> set[int]:
+    has_range_flag = any(
+        x is not None for x in (args.step_start, args.step_end, args.step_interval)
+    )
+    if has_range_flag:
+        if not all(
+            x is not None for x in (args.step_start, args.step_end, args.step_interval)
+        ):
+            raise SystemExit(
+                "Range mode requires --step-start, --step-end and --step-interval together."
+            )
+        if args.steps:
+            raise SystemExit("Use either --steps or range mode args, not both.")
+        if int(args.step_interval) <= 0:
+            raise SystemExit("--step-interval must be > 0.")
+        if int(args.step_start) <= 0 or int(args.step_end) <= 0:
+            raise SystemExit("--step-start/--step-end must be > 0.")
+        if int(args.step_end) < int(args.step_start):
+            raise SystemExit("--step-end must be >= --step-start.")
+
+        steps = list(
+            range(int(args.step_start), int(args.step_end) + 1, int(args.step_interval))
+        )
+        if args.include_end_step and int(args.step_end) not in steps:
+            steps.append(int(args.step_end))
+        return set(int(x) for x in steps)
+
+    if args.steps:
+        return set(int(x) for x in args.steps)
+    return {200, 400, 600, 782}
+
+
 def main() -> int:
     args = build_arg_parser().parse_args()
     manifest = load_json(args.manifest)
@@ -200,7 +256,7 @@ def main() -> int:
     if not experts:
         raise SystemExit(f"No experts found in {args.manifest}")
 
-    wanted_steps = set(int(x) for x in args.steps)
+    wanted_steps = resolve_wanted_steps(args)
     candidates_by_pair: dict[str, list[Candidate]] = defaultdict(list)
     metrics_files = find_metrics_files(args.eval_root)
     if not metrics_files:

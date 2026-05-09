@@ -446,7 +446,30 @@ python scripts/moe/select_best_moe_adapters_by_comet.py \
   --summary-csv training/moe_best_checkpoints_by_comet.csv
 ```
 
+也可用范围模式自动生成候选 step（例如每 1000 步从 1000 到 6250）：
+
+```bash
+python scripts/moe/select_best_moe_adapters_by_comet.py \
+  --manifest training/moe_router_manifest.json \
+  --eval-root /path/to/eval_multilingual \
+  --step-start 1000 \
+  --step-end 6250 \
+  --step-interval 1000 \
+  --include-end-step \
+  --output-manifest training/moe_router_manifest.best_by_comet.json \
+  --summary-csv training/moe_best_checkpoints_by_comet.csv
+```
+
 脚本会把每个 `adapter_path` 改写成对应 expert 下的最佳 `checkpoint-*` 目录，并写出一份汇总 CSV。
+
+如果不想手工一个个 checkpoint 启服务+评测，可用批量脚本自动循环（按 step 生成 manifest，串行执行：启动 vLLM → 评测 → 关闭 vLLM）：
+
+```bash
+STEP_START=1000 STEP_END=6250 STEP_INTERVAL=1000 INCLUDE_END_STEP=1 \
+bash scripts/run/run_eval_moe_checkpoints.sh
+```
+
+日志和汇总会写到 `logs/moe_eval_ckpt/<timestamp>/`，其中 `summary.tsv` 记录每个 step 的 PASS/FAIL。
 
 MoE 整体评测可直接走 router 方式，不需要手工逐个语言对调用：
 
