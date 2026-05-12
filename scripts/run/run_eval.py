@@ -628,6 +628,11 @@ def main() -> int:
         help="输出目录；配合 --hypotheses-jsonl 时可把 metrics 写到指定目录。",
     )
     parser.add_argument(
+        "--skip-metrics",
+        action="store_true",
+        help="仅生成或整理 hypotheses.jsonl，不计算 BLEU/COMET（可省去 sacrebleu/COMET 环境）。",
+    )
+    parser.add_argument(
         "--http-log-level",
         type=str,
         default=os.environ.get("HTTP_LOG_LEVEL", "WARNING"),
@@ -780,6 +785,25 @@ def main() -> int:
 
         hyp_path = run_dir / "hypotheses.jsonl"
         write_hypotheses_jsonl(hyp_path, results)
+
+    if args.skip_metrics:
+        meta = {
+            "mode": "generation_only",
+            "skip_metrics": True,
+            "served_model_name": args.served_model_name,
+            "base_url": args.base_url,
+            "model_family": args.model_family,
+            "model_tag": args.model_tag,
+            "manifest": str(args.manifest),
+            "eval_config": str(args.eval_config),
+            "num_samples": len(results),
+            "hypotheses": str(hyp_path),
+        }
+        with open(run_dir / "generation_meta.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        print(f"已跳过 metrics；hypotheses: {hyp_path}", file=sys.stderr)
+        print(f"完成。输出目录: {run_dir}")
+        return 0
 
     comet_ckpt, torch_mod, comet_load_from_checkpoint = prepare_comet_checkpoint(
         str(args.comet_model),
