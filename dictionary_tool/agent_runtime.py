@@ -203,7 +203,7 @@ class LangGraphDictionaryAgentRuntime:
         self.log_llm_output = log_llm_output
         self._client = None
         self._tools = build_openai_tools()
-        self._supported_pairs_hint: str | None = None
+        self._dictionary_hint: str | None = None
         self._dispatcher = None
 
     async def __aenter__(self) -> "LangGraphDictionaryAgentRuntime":
@@ -212,35 +212,30 @@ class LangGraphDictionaryAgentRuntime:
             lexicon_dir=self.lexicon_dir.resolve(),
         )
         pairs = self._dispatcher["list_dictionary_pairs"]()
-        self._supported_pairs_hint = self._format_supported_pairs_hint(pairs)
-        self._tools = build_openai_tools(supported_pairs_hint=self._supported_pairs_hint)
+        self._dictionary_hint = self._format_dictionary_hint(pairs)
+        self._tools = build_openai_tools(dictionary_hint=self._dictionary_hint)
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         self._client = None
         self._dispatcher = None
-        self._supported_pairs_hint = None
+        self._dictionary_hint = None
 
     @staticmethod
-    def _format_supported_pairs_hint(pairs: list[dict[str, Any]], max_items: int = 30) -> str:
-        formatted = [
-            f"{p.get('src_lang', '?')}->{p.get('tgt_lang', '?')}"
-            for p in pairs
-            if p.get("src_lang") and p.get("tgt_lang")
-        ]
-        if not formatted:
-            return "none"
-        head = formatted[:max_items]
-        if len(formatted) > max_items:
-            head.append(f"... (+{len(formatted) - max_items} more)")
-        return ", ".join(head)
+    def _format_dictionary_hint(pairs: list[dict[str, Any]]) -> str:
+        size = 0
+        for p in pairs:
+            if p.get("src_lang") == "vie_Latn" and p.get("tgt_lang") == "eng_Latn":
+                size = int(p.get("size", 0))
+                break
+        return f"Vietnamese→English (vie_Latn→eng_Latn) only; loaded_entries={size}."
 
     def _build_messages(self, *, text: str, src_lang: str, tgt_lang: str) -> list[dict[str, Any]]:
         messages = build_translation_messages(
             text=text,
             src_lang=src_lang,
             tgt_lang=tgt_lang,
-            supported_pairs_hint=self._supported_pairs_hint,
+            dictionary_hint=self._dictionary_hint,
         )
         if self.debug:
             prompt_dump = "\n\n".join(

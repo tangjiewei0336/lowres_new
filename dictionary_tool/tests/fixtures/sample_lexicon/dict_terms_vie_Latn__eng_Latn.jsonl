@@ -1,0 +1,3 @@
+{"source":"fixture","src_lang":"vie_Latn","tgt_lang":"eng_Latn","source_text":"đi","target_text":"to go","target_candidates":["to go","to walk"],"confidence":0.9,"relation":"translation","source_url":"fixture","license_note":"fixture","examples":[{"text":"đi chợ","translation":"go to the market"}]}
+{"source":"fixture","src_lang":"vie_Latn","tgt_lang":"eng_Latn","source_text":"nước","target_text":"water","target_candidates":["water","liquid"],"confidence":0.85,"relation":"translation","source_url":"fixture","license_note":"fixture"}
+{"source":"fixture","src_lang":"vie_Latn","tgt_lang":"eng_Latn","source_text":"nhà","target_text":"house","target_candidates":["house","home"],"confidence":0.88,"relation":"translation","source_url":"fixture","license_note":"fixture"}

@@ -33,14 +33,12 @@ def test_extract_final_translation_from_function_call_text() -> None:
 
 def test_extract_multiple_lookup_tool_call_blocks() -> None:
     text = (
-        '<tool_call>\n{"name": "lookup_dictionary", "arguments": {"src_lang": "eng_Latn", '
-        '"tgt_lang": "zho_Hans", "term": "success stories"}}\n</tool_call>\n'
-        '<tool_call>\n{"name": "lookup_dictionary", "arguments": {"src_lang": "eng_Latn", '
-        '"tgt_lang": "zho_Hans", "term": "future"}}\n</tool_call>'
+        '<tool_call>\n{"name": "lookup_dictionary", "arguments": {"term": "nước"}}\n</tool_call>\n'
+        '<tool_call>\n{"name": "lookup_dictionary", "arguments": {"term": "nhà"}}\n</tool_call>'
     )
     calls = extract_text_tool_calls(text)
     assert [c["name"] for c in calls] == ["lookup_dictionary", "lookup_dictionary"]
-    assert [c["arguments"]["term"] for c in calls] == ["success stories", "future"]
+    assert [c["arguments"]["term"] for c in calls] == ["nước", "nhà"]
 
 
 def test_regular_translation_is_not_tool_call_text() -> None:

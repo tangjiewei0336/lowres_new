@@ -237,6 +237,7 @@ def dict_record(
     source_url: str,
     license_note: str,
     pivot_text: str | None = None,
+    examples: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     candidates = unique_keep_order(target_candidates, limit=8)
     if not candidates:
@@ -255,4 +256,11 @@ def dict_record(
     }
     if pivot_text:
         rec["pivot_text"] = clean_text(pivot_text)
+    if examples:
+        trimmed: list[dict[str, Any]] = []
+        for item in examples[:12]:
+            if isinstance(item, dict) and item:
+                trimmed.append(dict(item))
+        if trimmed:
+            rec["examples"] = trimmed
     return rec

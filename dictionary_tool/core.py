@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 
+VIETNAMESE_ENGLISH_LEXICON_FILE = "dict_terms_vie_Latn__eng_Latn.jsonl"
+DICTIONARY_SRC_LANG = "vie_Latn"
+DICTIONARY_TGT_LANG = "eng_Latn"
+
 TRAD_TO_SIMP = str.maketrans(
     {
         "歲": "岁",
@@ -91,12 +95,19 @@ class DictionaryEntry:
     relation: str | None
     source_url: str | None
     license_note: str | None
+    examples: tuple[dict[str, Any], ...] | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "DictionaryEntry":
         candidates = row.get("target_candidates")
         if not isinstance(candidates, list):
             candidates = [row.get("target_text")] if isinstance(row.get("target_text"), str) else []
+        raw_ex = row.get("examples")
+        examples: tuple[dict[str, Any], ...] | None = None
+        if isinstance(raw_ex, list) and raw_ex:
+            examples = tuple(x for x in raw_ex if isinstance(x, dict))
+            if not examples:
+                examples = None
         return cls(
             source=str(row.get("source", "")),
             src_lang=str(row.get("src_lang", "")),
@@ -108,10 +119,11 @@ class DictionaryEntry:
             relation=str(row.get("relation")) if row.get("relation") is not None else None,
             source_url=str(row.get("source_url")) if row.get("source_url") is not None else None,
             license_note=str(row.get("license_note")) if row.get("license_note") is not None else None,
+            examples=examples,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "source": self.source,
             "src_lang": self.src_lang,
             "tgt_lang": self.tgt_lang,
@@ -123,6 +135,9 @@ class DictionaryEntry:
             "source_url": self.source_url,
             "license_note": self.license_note,
         }
+        if self.examples:
+            out["examples"] = [dict(x) for x in self.examples]
+        return out
 
 
 class DictionaryIndex:
@@ -135,26 +150,30 @@ class DictionaryIndex:
     def _load(self) -> None:
         if not self.lexicon_dir.is_dir():
             raise FileNotFoundError(f"Lexicon directory not found: {self.lexicon_dir}")
-        for path in sorted(self.lexicon_dir.glob("dict_terms_*__*.jsonl")):
-            entries: list[DictionaryEntry] = []
-            exact: dict[str, list[DictionaryEntry]] = {}
-            with path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    row = json.loads(line)
-                    entry = DictionaryEntry.from_row(row)
-                    if not entry.src_lang or not entry.tgt_lang or not entry.source_text:
-                        continue
-                    entries.append(entry)
-                    key = normalize_key(entry.source_text)
-                    exact.setdefault(key, []).append(entry)
-            if not entries:
-                continue
-            pair = (entries[0].src_lang, entries[0].tgt_lang)
-            self._pair_entries[pair] = entries
-            self._pair_exact[pair] = exact
+        path = self.lexicon_dir / VIETNAMESE_ENGLISH_LEXICON_FILE
+        if not path.is_file():
+            return
+        entries: list[DictionaryEntry] = []
+        exact: dict[str, list[DictionaryEntry]] = {}
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                entry = DictionaryEntry.from_row(row)
+                if not entry.src_lang or not entry.tgt_lang or not entry.source_text:
+                    continue
+                if entry.src_lang != DICTIONARY_SRC_LANG or entry.tgt_lang != DICTIONARY_TGT_LANG:
+                    continue
+                entries.append(entry)
+                key = normalize_key(entry.source_text)
+                exact.setdefault(key, []).append(entry)
+        if not entries:
+            return
+        pair = (DICTIONARY_SRC_LANG, DICTIONARY_TGT_LANG)
+        self._pair_entries[pair] = entries
+        self._pair_exact[pair] = exact
 
     def list_pairs(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
@@ -172,7 +191,10 @@ class DictionaryIndex:
     ) -> dict[str, Any]:
         pair = (src_lang, tgt_lang)
         if pair not in self._pair_entries:
-            raise ValueError(f"Dictionary pair not found: {src_lang}->{tgt_lang}")
+            raise ValueError(
+                f"Dictionary pair not found: {src_lang}->{tgt_lang}. "
+                f"Expected file {VIETNAMESE_ENGLISH_LEXICON_FILE} under {self.lexicon_dir}."
+            )
 
         key = normalize_key(term)
         if top_k < 1:
