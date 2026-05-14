@@ -461,6 +461,7 @@ python scripts/moe/select_best_moe_adapters_by_comet.py \
 ```
 
 脚本会把每个 `adapter_path` 改写成对应 expert 下的最佳 `checkpoint-*` 目录，并写出一份汇总 CSV。
+支持按语言方向（pair）分别选择 checkpoint：即使单次评测目录里是多语向 `metrics.csv`（MoE router 整体评测），也会为每个 `pair` 独立比较并选出最优 step。
 
 如果不想手工一个个 checkpoint 启服务+评测，可用批量脚本自动循环（按 step 生成 manifest，串行执行：启动 vLLM → 评测 → 关闭 vLLM）：
 

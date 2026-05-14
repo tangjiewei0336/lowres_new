@@ -123,6 +123,24 @@ def read_comet_from_metrics(metrics_csv: Path, pair: str, corpus: str) -> float 
     return None
 
 
+def read_pair_comet_from_metrics(metrics_csv: Path, corpus: str) -> dict[str, float]:
+    out: dict[str, float] = {}
+    with open(metrics_csv, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if str(row.get("corpus", "")).strip() != corpus:
+                continue
+            pair = str(row.get("pair", "")).strip()
+            val = str(row.get("comet", "")).strip()
+            if not pair or not val:
+                continue
+            try:
+                out[pair] = float(val)
+            except ValueError:
+                continue
+    return out
+
+
 def adapter_name_to_pair(adapter_name: str) -> str:
     prefix = "qwen3_8b_moe_"
     if adapter_name.startswith(prefix):
@@ -267,6 +285,23 @@ def main() -> int:
         step = infer_step_from_path(run_dir)
         if step is None or step not in wanted_steps:
             continue
+
+        # 优先支持一次评测包含多个 pair 的 metrics.csv（例如 moe_router 整体评测）。
+        pair_comets = read_pair_comet_from_metrics(metrics_csv, args.corpus)
+        if pair_comets:
+            for pair, comet in pair_comets.items():
+                candidates_by_pair[pair].append(
+                    Candidate(
+                        pair=pair,
+                        step=step,
+                        comet=float(comet),
+                        corpus=str(args.corpus),
+                        run_dir=run_dir,
+                    )
+                )
+            continue
+
+        # 兼容旧格式：单 pair 评测目录。
         pair = infer_pair_from_hypotheses(run_dir / "hypotheses.jsonl")
         if pair is None:
             pair = infer_pair_from_metrics(metrics_csv, args.corpus)
