@@ -5,8 +5,9 @@
 
 默认处理 modelscope_sources.json 中的 smollm3_3b、hunyuan_mt1_5_1_8b、qwen3_4b、qwen3_8b、qwen3_8b_base、qwen3_4b_instruct_2507、qwen3_5_27b、qwen3_5_27b_instruct
 （Qwen3-8B Base Hub: https://huggingface.co/Qwen/Qwen3-8B-Base ；Instruct 对应 Hub: https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507 ；Qwen3.5-27B Hub: https://huggingface.co/Qwen/Qwen3.5-27B ）。
-另会处理 comet_models 中的 comet_wmt22_da，使用 huggingface_hub 下载到 models/Unbabel_wmt22-comet-da，
-与 scripts/run/run_eval.py 的默认 --comet-model 路径一致。
+另会处理 comet_models 中的 comet_wmt22_da / comet_wmt22_qe，使用 huggingface_hub 下载到
+models/Unbabel_wmt22-comet-da / models/Unbabel_wmt22-cometkiwi-da，
+与评测/分析脚本的默认 COMET 路径一致。
 用法:
   conda activate lowres
   python scripts/download_models_to_models_dir.py
@@ -17,6 +18,7 @@
   python scripts/download_models_to_models_dir.py --only qwen3_5_27b
   python scripts/download_models_to_models_dir.py --only qwen3_5_27b_instruct
   python scripts/download_models_to_models_dir.py --only comet_wmt22_da
+  python scripts/download_models_to_models_dir.py --only comet_wmt22_qe
 """
 from __future__ import annotations
 
@@ -35,6 +37,8 @@ def root() -> Path:
 def comet_local_dir_for_key(models_root: Path, key: str) -> Path:
     if key == "comet_wmt22_da":
         return models_root / "Unbabel_wmt22-comet-da"
+    if key == "comet_wmt22_qe":
+        return models_root / "Unbabel_wmt22-cometkiwi-da"
     return models_root / key
 
 
@@ -48,7 +52,7 @@ def main() -> int:
         help=(
             "仅下载指定键（可重复），如 qwen3_4b、qwen3_8b、qwen3_8b_base、"
             "qwen3_4b_instruct_2507、qwen3_5_27b、qwen3_5_27b_instruct、"
-            "comet_wmt22_da；默认全部"
+            "comet_wmt22_da、comet_wmt22_qe；默认全部"
         ),
     )
     parser.add_argument("--dry-run", action="store_true", help="只打印将执行的操作")
@@ -95,6 +99,7 @@ def main() -> int:
         "qwen3_5_27b": "Qwen3.5-27B",
         "qwen3_5_27b_instruct": "Qwen3.5-27B-Instruct",
         "comet_wmt22_da": "Unbabel_wmt22-comet-da",
+        "comet_wmt22_qe": "Unbabel_wmt22-cometkiwi-da",
     }
 
     for key in keys:

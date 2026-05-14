@@ -4,6 +4,7 @@ Download evaluation assets on an internet-connected machine.
 
 Assets:
   - COMET: Unbabel/wmt22-comet-da -> models/Unbabel_wmt22-comet-da
+  - COMET-QE: Unbabel/wmt22-cometkiwi-da -> models/Unbabel_wmt22-cometkiwi-da
   - COMET encoder: FacebookAI/xlm-roberta-large -> models/xlm-roberta-large
   - spBLEU/FLORES200 SPM:
       OpenNMT/nllb-200-onmt/flores200_sacrebleu_tokenizer_spm.model
@@ -23,6 +24,7 @@ from pathlib import Path
 
 
 COMET_REPO = "Unbabel/wmt22-comet-da"
+COMET_QE_REPO = "Unbabel/wmt22-cometkiwi-da"
 XLM_ROBERTA_REPO = "FacebookAI/xlm-roberta-large"
 SPBLEU_REPO = "OpenNMT/nllb-200-onmt"
 SPBLEU_FILENAME = "flores200_sacrebleu_tokenizer_spm.model"
@@ -43,6 +45,7 @@ def main() -> int:
     ap.add_argument("--models-dir", type=Path, default=root / "models")
     ap.add_argument("--hf-endpoint", default=os.environ.get("HF_ENDPOINT"))
     ap.add_argument("--skip-comet", action="store_true")
+    ap.add_argument("--skip-comet-qe", action="store_true")
     ap.add_argument("--skip-xlm-roberta", action="store_true")
     ap.add_argument("--skip-spbleu", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -58,6 +61,7 @@ def main() -> int:
         os.environ["HF_ENDPOINT"] = args.hf_endpoint
 
     comet_dir = args.models_dir / "Unbabel_wmt22-comet-da"
+    comet_qe_dir = args.models_dir / "Unbabel_wmt22-cometkiwi-da"
     xlm_roberta_dir = args.models_dir / "xlm-roberta-large"
     spbleu_dir = args.models_dir / "sacrebleu"
     spbleu_path = spbleu_dir / SPBLEU_FILENAME
@@ -65,6 +69,8 @@ def main() -> int:
     print(f"models_dir={args.models_dir}")
     if not args.skip_comet:
         print(f"[comet] {COMET_REPO} -> {comet_dir}")
+    if not args.skip_comet_qe:
+        print(f"[comet-qe] {COMET_QE_REPO} -> {comet_qe_dir}")
     if not args.skip_xlm_roberta:
         print(f"[xlm-roberta] {XLM_ROBERTA_REPO} -> {xlm_roberta_dir}")
     if not args.skip_spbleu:
@@ -80,6 +86,13 @@ def main() -> int:
         snapshot_download(
             repo_id=COMET_REPO,
             local_dir=str(comet_dir),
+            local_dir_use_symlinks=False,
+        )
+
+    if not args.skip_comet_qe:
+        snapshot_download(
+            repo_id=COMET_QE_REPO,
+            local_dir=str(comet_qe_dir),
             local_dir_use_symlinks=False,
         )
 
@@ -107,6 +120,7 @@ def main() -> int:
         args.bundle.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(args.bundle, "w:gz") as tf:
             add_to_tar(tf, comet_dir, "models/Unbabel_wmt22-comet-da")
+            add_to_tar(tf, comet_qe_dir, "models/Unbabel_wmt22-cometkiwi-da")
             add_to_tar(tf, xlm_roberta_dir, "models/xlm-roberta-large")
             add_to_tar(tf, spbleu_path, f"models/sacrebleu/{SPBLEU_FILENAME}")
         print(f"bundle={args.bundle}")

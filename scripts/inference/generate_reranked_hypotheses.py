@@ -427,7 +427,7 @@ def main() -> int:
     parser.add_argument("--rag-index-limit", type=int, default=0, help="Optional max augmented examples per pair.")
     parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     parser.add_argument("--embedding-device", default=None)
-    parser.add_argument("--comet-qe-model", default="Unbabel/wmt22-cometkiwi-da")
+    parser.add_argument("--comet-qe-model", default="models/Unbabel_wmt22-cometkiwi-da")
     parser.add_argument("--comet-encoder-model", type=Path, default=eval_common.root() / "models" / "xlm-roberta-large")
     parser.add_argument("--comet-batch-size", type=int, default=8)
     parser.add_argument("--offline-eval-assets", action=argparse.BooleanOptionalAction, default=True)

@@ -28,6 +28,7 @@
     "qwen3_5_27b_instruct": "Qwen/Qwen3.5-27B"
   },
   "comet_models": {
-    "comet_wmt22_da": "Unbabel/wmt22-comet-da"
+    "comet_wmt22_da": "Unbabel/wmt22-comet-da",
+    "comet_wmt22_qe": "Unbabel/wmt22-cometkiwi-da"
   }
 }
