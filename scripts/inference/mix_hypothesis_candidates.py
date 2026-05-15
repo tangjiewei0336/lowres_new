@@ -8,18 +8,21 @@
   3) 若仍多于 max_candidates 条，仅保留 QE 分数最高的 max_candidates 条。
   4) 若步骤 1 后一条都不剩：从合并前的全部候选中保留 QE 最高的一条。
 
-配置：默认读取仓库根目录下 configs/mix_hypothesis_candidates.json（可用 --mix-config 指定）。
+配置：默认 configs/mix_hypothesis_candidates.json。支持：
+  - default_len_ratio：全局兜底
+  - pairs：eval_pair 粒度（例 eng_Latn->zho_Hans）
+  - corpus_pairs：eval_corpus|eval_pair 粒度（优先级高于 pairs）
 
-QE 字段：默认 comet_qe。若上游是 LLM rerank 跑出来的 candidates 且无分数，可加
-  --comet-qe-model ... 在本次脚本里批量打分。
+ per 语向区间可用 scripts/analysis/build_mix_len_ratio_config.py 基于 analyze_length_ratios 统计生成。
+
+QE：默认 comet_qe；若缺失可加 --comet-qe-model 现算。
 
 示例：
   conda run -n lowres python scripts/inference/mix_hypothesis_candidates.py \\
     --mix-config configs/mix_hypothesis_candidates.json \\
-    --input run/exp_a_sample_llm/candidates.jsonl \\
-    --input run/exp_b_rag_llm/candidates.jsonl \\
-    --output-dir eval_multilingual/my_mix/run_001 \\
-    --comet-qe-model models/Unbabel_wmt22-cometkiwi-da
+    --input run/exp_a/candidates.jsonl \\
+    --input run/exp_b/candidates.jsonl \\
+    --output-dir eval_multilingual/my_mix/run_001
 """
 from __future__ import annotations
 
@@ -88,26 +91,76 @@ def pair_from_item(row: dict[str, Any]) -> str:
     return str(row.get("eval_pair") or f"{row.get('src_lang', '')}->{row.get('tgt_lang', '')}")
 
 
+def _parse_pairs_map(raw_pairs: Any) -> dict[str, tuple[float, float]]:
+    if not isinstance(raw_pairs, dict):
+        return {}
+    out: dict[str, tuple[float, float]] = {}
+    for k, v in raw_pairs.items():
+        if not isinstance(v, dict):
+            continue
+        out[str(k)] = (float(v["min_len_ratio"]), float(v["max_len_ratio"]))
+    return out
+
+
 def load_mix_config(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"mix config 不存在: {path}")
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(cfg, dict):
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
         raise ValueError("mix config JSON 必须为 object")
-    allowed = {
-        "min_len_ratio",
-        "max_len_ratio",
-        "max_candidates",
-        "qe_score_field",
-        "hypothesis_normalize_for_dedupe",
+
+    if "default_len_ratio" in raw and isinstance(raw["default_len_ratio"], dict):
+        dlr = raw["default_len_ratio"]
+        dmin = float(dlr["min_len_ratio"])
+        dmax = float(dlr["max_len_ratio"])
+    elif "min_len_ratio" in raw and "max_len_ratio" in raw:
+        # 兼容旧版扁平写法
+        dmin = float(raw["min_len_ratio"])
+        dmax = float(raw["max_len_ratio"])
+    else:
+        raise ValueError("mix config 需包含 default_len_ratio 或顶层 min_len_ratio/max_len_ratio")
+
+    mc = raw.get("max_candidates")
+    if mc is None:
+        raise ValueError("mix config 缺少 max_candidates")
+    out: dict[str, Any] = {
+        "defaults": (dmin, dmax),
+        "pairs": _parse_pairs_map(raw.get("pairs")),
+        "corpus_pairs": _parse_pairs_map(raw.get("corpus_pairs")),
+        "max_candidates": int(mc),
+        "qe_score_field": str(raw.get("qe_score_field", "comet_qe")),
+        "hypothesis_normalize_for_dedupe": bool(raw.get("hypothesis_normalize_for_dedupe", True)),
     }
-    out = {k: v for k, v in cfg.items() if k in allowed}
-    for required in ("min_len_ratio", "max_len_ratio", "max_candidates"):
-        if required not in out:
-            raise ValueError(f"mix config 缺少字段: {required}")
-    out.setdefault("qe_score_field", "comet_qe")
-    out.setdefault("hypothesis_normalize_for_dedupe", True)
     return out
+
+
+def resolve_len_bounds_for_row(row: dict[str, Any], mix: dict[str, Any]) -> tuple[float, float, str]:
+    """返回 (min_len_ratio, max_len_ratio, 命中来源)。"""
+
+    pair = pair_from_item(row)
+    corpus = str(row.get("eval_corpus") or row.get("dataset") or "").strip()
+    if corpus:
+        ck = f"{corpus}|{pair}"
+        if ck in mix["corpus_pairs"]:
+            lo, hi = mix["corpus_pairs"][ck]
+            return lo, hi, "corpus_pair"
+    if pair in mix["pairs"]:
+        lo, hi = mix["pairs"][pair]
+        return lo, hi, "pair"
+    lo, hi = mix["defaults"]
+    return lo, hi, "default"
+
+
+def mix_config_summary_for_meta(mix: dict[str, Any]) -> dict[str, Any]:
+    """JSON-serializable 摘要。"""
+    return {
+        "defaults": {"min_len_ratio": mix["defaults"][0], "max_len_ratio": mix["defaults"][1]},
+        "pairs": {k: {"min_len_ratio": v[0], "max_len_ratio": v[1]} for k, v in mix["pairs"].items()},
+        "corpus_pairs": {k: {"min_len_ratio": v[0], "max_len_ratio": v[1]} for k, v in mix["corpus_pairs"].items()},
+        "max_candidates": mix["max_candidates"],
+        "qe_score_field": mix["qe_score_field"],
+        "hypothesis_normalize_for_dedupe": mix["hypothesis_normalize_for_dedupe"],
+    }
 
 
 def get_qe(row: dict[str, Any], qe_field: str) -> float | None:
@@ -144,8 +197,8 @@ def comet_score_rows(rows: list[dict[str, Any]], qe_field: str, cfg: argparse.Na
 
 def select_for_sample(rows: list[dict[str, Any]], mix: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """rows：同一样本在多个输入文件中合并后的所有扁平行。"""
-    min_lr = float(mix["min_len_ratio"])
-    max_lr = float(mix["max_len_ratio"])
+    ref = rows[0]
+    min_lr, max_lr, bounds_src = resolve_len_bounds_for_row(ref, mix)
     max_k = int(mix["max_candidates"])
     qe_field = str(mix["qe_score_field"])
     norm_dedupe = bool(mix["hypothesis_normalize_for_dedupe"])
@@ -155,6 +208,9 @@ def select_for_sample(rows: list[dict[str, Any]], mix: dict[str, Any]) -> tuple[
         "len_ok_count": 0,
         "used_len_empty_fallback": False,
         "fallback_reason": "",
+        "len_bounds_source": bounds_src,
+        "min_len_ratio_used": min_lr,
+        "max_len_ratio_used": max_lr,
     }
 
     def row_qe(row: dict[str, Any]) -> float:
@@ -323,7 +379,7 @@ def main() -> int:
 
     write_jsonl(args.output_dir / "candidates.jsonl", out_candidates)
     meta = {
-        "mix_config_resolved": mix_cfg,
+        "mix_config_resolved": mix_config_summary_for_meta(mix_cfg),
         "mix_config_path": str(args.mix_config.resolve()),
         "manifest_used": str(args.manifest.resolve()) if args.manifest else None,
         "inputs": [str(Path(x).resolve()) for x in args.inputs],

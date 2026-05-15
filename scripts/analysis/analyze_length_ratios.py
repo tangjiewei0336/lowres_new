@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Compare hypothesis/source length ratio against reference/source ratio."""
+"""Compare hypothesis/source length ratio against reference/source ratio.
+
+Output CSV (`length_ratios.<unit>.csv`) feeds `build_mix_len_ratio_config.py`
+to derive per-language-pair length-ratio bands from `ref_src_ratio` statistics.
+Use that script's `--hypotheses-jsonl` when you want the same tokenizer as mix
+(`mix_hypothesis_candidates` TOKEN_RE) instead of this analyzer's per-lang rules.
+"""
 from __future__ import annotations
 
 import argparse

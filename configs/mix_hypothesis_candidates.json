@@ -1,8 +1,12 @@
 {
-  "min_len_ratio": 0.3,
-  "max_len_ratio": 3.0,
+  "default_len_ratio": {
+    "min_len_ratio": 0.3,
+    "max_len_ratio": 3.0
+  },
+  "pairs": {},
+  "corpus_pairs": {},
   "max_candidates": 5,
   "qe_score_field": "comet_qe",
   "hypothesis_normalize_for_dedupe": true,
-  "_comment_len_ratio": "长度比 = 译文 token 数 / 源文 token 数，与 scripts/prepare/filter_augmented_mt_by_qe_stats.py 中的 TOKEN_RE 分词约定一致。"
+  "_comment_len_ratio": "候选长度比 = 译文 token 数 / 源文 token 数（与 mix 脚本内 TOKEN_RE 一致）。可按语向在 pairs 中配置；若需区分 corpus，用 corpus_pairs，键为 \"语料名|src->tgt\"，与 eval_corpus 及 eval_pair 一致。可用 scripts/analysis/build_mix_len_ratio_config.py 从 analyze_length_ratios 的 CSV 生成。"
 }
