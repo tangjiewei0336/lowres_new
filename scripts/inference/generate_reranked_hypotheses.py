@@ -2,8 +2,8 @@
 """
 Generate translation candidates and select the final hypothesis by reranking.
 
-This script covers the 2 x 2 inference-time combinations:
-  candidate-mode = sample | rag
+This script covers inference-time combinations:
+  candidate-mode = sample | rag | mixed (mixed = read flat candidates, see --from-flat-candidates-jsonl)
   reranker       = llm | comet-qe
 
 Examples:
@@ -20,6 +20,11 @@ Examples:
     --embedding-model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 \
     --base-url "$OPENAI_API_BASE" --api-key "$OPENAI_API_KEY" \
     --model qwen3-8b --model-family qwen --model-tag qwen3_8b_rag_cometqe
+
+  # Rerank only from mix_hypothesis_candidates.py output (combined sample+RAG flats)
+  conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
+    --from-flat-candidates-jsonl eval_multilingual/my_mix/run_001/candidates.jsonl \
+    --reranker llm --model qwen3-8b --model-family qwen --model-tag qwen3_8b_mixed_llm
 """
 from __future__ import annotations
 
@@ -379,6 +384,84 @@ def llm_rerank(
     return idx, raw
 
 
+_FLAT_ROW_CAND_FIELDS = frozenset(
+    {
+        "hypothesis",
+        "candidate_id",
+        "candidate_source",
+        "retrieval_score",
+        "retrieved_source",
+        "retrieved_target",
+        "comet_qe",
+    }
+)
+
+
+def split_candidate_flat_row(row: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """扁平行拆解为样本 base 与单项 candidate 字典。"""
+    cand: dict[str, Any] = {}
+    base = dict(row)
+    for k in _FLAT_ROW_CAND_FIELDS:
+        if k in base:
+            cand[k] = base.pop(k)
+    return base, cand
+
+
+def _candidate_id_sort_key(row: dict[str, Any]) -> int:
+    raw = row.get("candidate_id", 999)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 999
+
+
+def candidate_rows_from_flat_jsonl(path: Path, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """从 mix 脚本等产出的扁平 candidates.jsonl 恢复 generate 所使用的嵌套结构。"""
+    flat_lines = read_jsonl(path)
+    if not flat_lines:
+        raise SystemExit(f"--from-flat-candidates-jsonl 为空: {path}")
+    groups: defaultdict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
+    for row in flat_lines:
+        groups[eval_common.result_key(row)].append(row)
+
+    ordered_keys = [eval_common.result_key(it) for it in items]
+    keys_done: set[tuple[Any, ...]] = set()
+    out: list[dict[str, Any]] = []
+
+    def build_one_row(key: tuple[Any, ...]) -> dict[str, Any]:
+        grp = groups[key]
+        grp_sorted = sorted(grp, key=_candidate_id_sort_key)
+        base0, _ = split_candidate_flat_row(grp_sorted[0])
+        src0 = base0.get("source_text")
+        cands_out: list[dict[str, Any]] = []
+        for i, r in enumerate(grp_sorted):
+            base_i, cand = split_candidate_flat_row(r)
+            if base_i.get("source_text") != src0:
+                raise RuntimeError(
+                    f"同一 result_key 下 source_text 不一致: key={key} sample_id={base0.get('sample_id')}"
+                )
+            cand = dict(cand)
+            cand["candidate_id"] = i
+            if "hypothesis" not in cand:
+                cand["hypothesis"] = ""
+            cands_out.append(cand)
+        return {**base0, "candidates": cands_out}
+
+    for key in ordered_keys:
+        if key not in groups:
+            raise SystemExit(f"扁平候选文件缺少评测样本（key={key}），请核对 manifest / items-jsonl")
+        out.append(build_one_row(key))
+        keys_done.add(key)
+
+    rest = sorted(k for k in groups if k not in keys_done)
+    for key in rest:
+        print(
+            f"[warn] 扁平候选中存在 manifest/items 之外的 key={key}，已跳过（以免影响 hypotheses 顺序）",
+            file=sys.stderr,
+        )
+    return out
+
+
 def comet_qe_scores(
     rows: list[dict[str, Any]],
     *,
@@ -406,13 +489,24 @@ def main() -> int:
     parser.add_argument("--eval-config", type=Path, default=eval_common.root() / "evaluation_config.json")
     parser.add_argument("--manifest", type=Path, default=eval_common.root() / "datasets" / "eval_manifest.json")
     parser.add_argument("--items-jsonl", type=Path, default=None)
+    parser.add_argument(
+        "--from-flat-candidates-jsonl",
+        type=Path,
+        default=None,
+        help="跳过生成阶段，直接读取扁平 candidates.jsonl（如 mix_hypothesis_candidates 产出），再接 reranker。此时 --candidate-mode 默认记作 mixed（仅写入 meta）。",
+    )
     parser.add_argument("--output-run-dir", type=Path, default=None)
     parser.add_argument("--model-tag", default=os.environ.get("EVAL_MODEL_TAG", "rerank"))
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_API_BASE", ""))
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "EMPTY"))
     parser.add_argument("--model", required=True)
     parser.add_argument("--model-family", default=os.environ.get("EVAL_MODEL_FAMILY", "qwen"))
-    parser.add_argument("--candidate-mode", choices=["sample", "rag"], required=True)
+    parser.add_argument(
+        "--candidate-mode",
+        choices=["sample", "rag", "mixed"],
+        default=None,
+        help="mixed 通常在提供 --from-flat-candidates-jsonl 时使用（或未指定时将由该选项自动设为 mixed）。",
+    )
     parser.add_argument("--reranker", choices=["llm", "comet-qe"], required=True)
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--sample-temperature", type=float, default=0.7)
@@ -432,6 +526,18 @@ def main() -> int:
     parser.add_argument("--comet-batch-size", type=int, default=8)
     parser.add_argument("--offline-eval-assets", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
+    if args.from_flat_candidates_jsonl:
+        args.candidate_mode = args.candidate_mode or "mixed"
+        if args.candidate_mode != "mixed":
+            print(
+                f"[warn] 已加载 --from-flat-candidates-jsonl，将 candidate_mode={args.candidate_mode} 重写为 mixed（仅写入 meta）",
+                file=sys.stderr,
+            )
+            args.candidate_mode = "mixed"
+    elif args.candidate_mode == "mixed":
+        raise SystemExit("--candidate-mode mixed 仅支持与 --from-flat-candidates-jsonl 一起使用")
+    elif args.candidate_mode is None:
+        raise SystemExit("请指定 --candidate-mode（sample|rag），或传入 --from-flat-candidates-jsonl")
 
     eval_common.quiet_http_logging()
     eval_cfg = eval_common.load_json(args.eval_config)
@@ -457,7 +563,7 @@ def main() -> int:
     client = OpenAI(**client_kwargs)
 
     retrievers: dict[str, FaissRetriever] = {}
-    if args.candidate_mode == "rag":
+    if args.candidate_mode == "rag" and not args.from_flat_candidates_jsonl:
         by_pair: dict[str, tuple[str, str]] = {}
         for it in items:
             by_pair[pair_from_item(it)] = (it["src_lang"], it["tgt_lang"])
@@ -507,13 +613,19 @@ def main() -> int:
             raise RuntimeError(f"No candidates for {pair_from_item(it)} sample_id={it.get('sample_id')}")
         return {**it, "candidates": cands}
 
-    candidate_rows_unordered: list[dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = [ex.submit(make_candidates, it) for it in items]
-        for fut in tqdm(as_completed(futs), total=len(futs), desc=f"generate-{args.candidate_mode}"):
-            candidate_rows_unordered.append(fut.result())
-    by_key = {eval_common.result_key(r): r for r in candidate_rows_unordered}
-    candidate_rows = [by_key[eval_common.result_key(it)] for it in items]
+    if args.from_flat_candidates_jsonl:
+        if not args.from_flat_candidates_jsonl.is_file():
+            raise FileNotFoundError(args.from_flat_candidates_jsonl)
+        # 仅用 manifest 的顺序重建；与 mix 脚本 --manifest 一致时可保证 deterministic
+        candidate_rows = candidate_rows_from_flat_jsonl(args.from_flat_candidates_jsonl, items)
+    else:
+        candidate_rows_unordered: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = [ex.submit(make_candidates, it) for it in items]
+            for fut in tqdm(as_completed(futs), total=len(futs), desc=f"generate-{args.candidate_mode}"):
+                candidate_rows_unordered.append(fut.result())
+        by_key = {eval_common.result_key(r): r for r in candidate_rows_unordered}
+        candidate_rows = [by_key[eval_common.result_key(it)] for it in items]
 
     flat_candidates: list[dict[str, Any]] = []
     for row in candidate_rows:
@@ -619,7 +731,8 @@ def main() -> int:
         "num_samples": len(final_rows),
         "aug_data_dir": str(args.aug_data_dir),
         "rag_index_dir": str(args.rag_index_dir) if args.candidate_mode == "rag" else None,
-        "embedding_model": args.embedding_model if args.candidate_mode == "rag" else None,
+        "embedding_model": args.embedding_model if args.candidate_mode == "rag" and not args.from_flat_candidates_jsonl else None,
+        "from_flat_candidates_jsonl": str(args.from_flat_candidates_jsonl.resolve()) if args.from_flat_candidates_jsonl else None,
         "comet_qe_model": args.comet_qe_model if args.reranker == "comet-qe" else None,
     }
     (run_dir / "generation_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

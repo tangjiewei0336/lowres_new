@@ -1,0 +1,8 @@
+{
+  "min_len_ratio": 0.3,
+  "max_len_ratio": 3.0,
+  "max_candidates": 5,
+  "qe_score_field": "comet_qe",
+  "hypothesis_normalize_for_dedupe": true,
+  "_comment_len_ratio": "长度比 = 译文 token 数 / 源文 token 数，与 scripts/prepare/filter_augmented_mt_by_qe_stats.py 中的 TOKEN_RE 分词约定一致。"
+}
