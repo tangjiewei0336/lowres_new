@@ -2,9 +2,8 @@
 """
 使用 OpenAI 兼容 API 按 eval manifest 批量生成 hypothesis，并写成与 run_eval.py 对齐的 hypotheses.jsonl。
 
-示例：
+示例（默认连本地 vLLM http://127.0.0.1:8000/v1）：
   python scripts/run/generate/generate_hypotheses_openai.py \
-    --base-url "" \
     --api-key "$OPENAI_API_KEY" \
     --model your-model-name \
     --model-tag ext_api_qwen
@@ -30,6 +29,8 @@ if str(RUN_DIR) not in sys.path:
 
 import run_eval as eval_common
 
+_DEFAULT_OPENAI_API_BASE = "http://127.0.0.1:8000/v1"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="OpenAI 兼容 API 批量生成 hypotheses.jsonl")
@@ -48,8 +49,8 @@ def main() -> int:
     parser.add_argument(
         "--base-url",
         type=str,
-        default=os.environ.get("OPENAI_API_BASE", ""),
-        help="OpenAI 兼容 API base，留空则走官方默认端点。",
+        default=os.environ.get("OPENAI_API_BASE", _DEFAULT_OPENAI_API_BASE),
+        help=f"OpenAI 兼容 API base（默认 {_DEFAULT_OPENAI_API_BASE}，本地 vLLM）",
     )
     parser.add_argument(
         "--api-key",

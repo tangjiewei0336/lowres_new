@@ -61,6 +61,8 @@ if str(RUN_DIR) not in sys.path:
 
 import run_eval as eval_common  # noqa: E402
 
+_DEFAULT_OPENAI_API_BASE = "http://127.0.0.1:8000/v1"
+
 
 @dataclass(frozen=True)
 class Example:
@@ -609,7 +611,11 @@ def main() -> int:
     )
     parser.add_argument("--output-run-dir", type=Path, default=None)
     parser.add_argument("--model-tag", default=os.environ.get("EVAL_MODEL_TAG", "rerank"))
-    parser.add_argument("--base-url", default=os.environ.get("OPENAI_API_BASE", ""))
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("OPENAI_API_BASE", _DEFAULT_OPENAI_API_BASE),
+        help=f"OpenAI 兼容 HTTP 根路径（含 /v1，默认 {_DEFAULT_OPENAI_API_BASE}）",
+    )
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "EMPTY"))
     parser.add_argument("--model", required=True)
     parser.add_argument("--model-family", default=os.environ.get("EVAL_MODEL_FAMILY", "qwen"))

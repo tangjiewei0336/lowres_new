@@ -24,7 +24,7 @@ shift 3
 COMMON_ARGS=(
   --model "${MODEL}"
   --model-family "${MODEL_FAMILY}"
-  --base-url "${OPENAI_API_BASE:-}"
+  --base-url "${OPENAI_API_BASE:-http://127.0.0.1:8000/v1}"
   --api-key "${OPENAI_API_KEY:-EMPTY}"
   "$@"
 )
