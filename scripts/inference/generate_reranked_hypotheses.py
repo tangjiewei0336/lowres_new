@@ -4,7 +4,7 @@ Generate translation candidates and select the final hypothesis by reranking.
 
 This script covers inference-time combinations:
   candidate-mode = sample | rag | manyshot | mixed (mixed = read flat candidates, see --from-flat-candidates-jsonl)
-  reranker       = llm | comet-qe
+  reranker       = llm | comet-qe（manyshot 不做 rerank，可不传 --reranker）
 
 Examples:
   # P(y|x), five candidates, LLM reranker
@@ -21,13 +21,13 @@ Examples:
     --base-url "$OPENAI_API_BASE" --api-key "$OPENAI_API_KEY" \
     --model qwen3-8b --model-family qwen --model-tag qwen3_8b_rag_cometqe
 
-  # Many-shot ICL: random exemplars from augmented pair JSONL (default 100), translate last
+  # Many-shot ICL (no rerank; first candidate -> hypotheses)
   conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
-    --candidate-mode manyshot --reranker llm \
+    --candidate-mode manyshot \
     --aug-data-dir training/data/multilingual/fineweb2_synth \
     --manyshot-k 100 --manyshot-seed 42 \
     --base-url "$OPENAI_API_BASE" --api-key "$OPENAI_API_KEY" \
-    --model qwen3-8b --model-family qwen --model-tag qwen3_8b_manyshot_llm
+    --model qwen3-8b --model-family qwen --model-tag qwen3_8b_manyshot
 
   # Rerank only from mix_hypothesis_candidates.py output (combined sample+RAG flats)
   conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
@@ -617,9 +617,14 @@ def main() -> int:
         "--candidate-mode",
         choices=["sample", "rag", "manyshot", "mixed"],
         default=None,
-        help="mixed 通常在提供 --from-flat-candidates-jsonl 时使用（或未指定时将由该选项自动设为 mixed）。manyshot：从增强 JSONL 随机抽若干条作 ICL。",
+        help="manyshot：随机多示例 ICL，且不做 rerank。mixed 通常与 --from-flat-candidates-jsonl 同用。",
     )
-    parser.add_argument("--reranker", choices=["llm", "comet-qe"], required=True)
+    parser.add_argument(
+        "--reranker",
+        choices=["llm", "comet-qe"],
+        default=None,
+        help="manyshot 模式不做 rerank，可不传；其它 candidate-mode 须指定 llm 或 comet-qe。",
+    )
     parser.add_argument("--num-candidates", type=int, default=5)
     parser.add_argument("--sample-temperature", type=float, default=0.7)
     parser.add_argument("--max-workers", type=int, default=0)
@@ -664,6 +669,12 @@ def main() -> int:
     elif args.candidate_mode is None:
         raise SystemExit("请指定 --candidate-mode（sample|rag|manyshot），或传入 --from-flat-candidates-jsonl")
 
+    if args.candidate_mode == "manyshot":
+        if args.reranker is not None:
+            print("[warn] manyshot 模式不使用 rerank，已忽略 --reranker", file=sys.stderr)
+    elif args.reranker is None:
+        raise SystemExit("请指定 --reranker llm 或 comet-qe（manyshot 可省略）")
+
     eval_common.quiet_http_logging()
     eval_cfg = eval_common.load_json(args.eval_config)
     manifest = eval_common.load_json(args.manifest)
@@ -677,8 +688,9 @@ def main() -> int:
     max_tokens = int(args.max_tokens or eval_cfg.get("max_tokens", 512))
     max_workers = int(args.max_workers or eval_cfg.get("max_workers", 8))
     base_out = eval_common.root() / eval_cfg.get("output_dir", "eval_multilingual")
+    rerank_tag = "no_rerank" if args.candidate_mode == "manyshot" else str(args.reranker)
     run_dir = args.output_run_dir or (
-        base_out / f"{args.model_tag}_{args.candidate_mode}_{args.reranker}_{int(time.time())}"
+        base_out / f"{args.model_tag}_{args.candidate_mode}_{rerank_tag}_{int(time.time())}"
     )
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -789,7 +801,10 @@ def main() -> int:
     write_jsonl(run_dir / "candidates.jsonl", flat_candidates)
 
     selected: dict[tuple[Any, ...], tuple[int, str, float | None]] = {}
-    if args.reranker == "llm":
+    if args.candidate_mode == "manyshot":
+        for row in candidate_rows:
+            selected[eval_common.result_key(row)] = (0, "manyshot_no_rerank", None)
+    elif args.reranker == "llm":
         def rerank_one(row: dict[str, Any]) -> tuple[tuple[Any, ...], int, str]:
             idx, raw = llm_rerank(
                 client,
@@ -841,7 +856,7 @@ def main() -> int:
         final["hypothesis"] = cand["hypothesis"]
         final["selected_candidate_id"] = cand["candidate_id"]
         final["candidate_mode"] = args.candidate_mode
-        final["reranker"] = args.reranker
+        final["reranker"] = "none" if args.candidate_mode == "manyshot" else args.reranker
         if score is not None:
             final["selected_comet_qe"] = score
         final_rows.append(final)
@@ -879,7 +894,7 @@ def main() -> int:
         "model_family": args.model_family,
         "base_url": args.base_url,
         "candidate_mode": args.candidate_mode,
-        "reranker": args.reranker,
+        "reranker": "none" if args.candidate_mode == "manyshot" else args.reranker,
         "num_candidates": args.num_candidates,
         "items_jsonl": str(items_path),
         "num_samples": len(final_rows),
@@ -892,7 +907,9 @@ def main() -> int:
         if args.candidate_mode == "manyshot" and not args.from_flat_candidates_jsonl
         else None,
         "from_flat_candidates_jsonl": str(args.from_flat_candidates_jsonl.resolve()) if args.from_flat_candidates_jsonl else None,
-        "comet_qe_model": args.comet_qe_model if args.reranker == "comet-qe" else None,
+        "comet_qe_model": args.comet_qe_model
+        if args.candidate_mode != "manyshot" and args.reranker == "comet-qe"
+        else None,
     }
     (run_dir / "generation_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"完成。run_dir: {run_dir}")
