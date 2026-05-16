@@ -3,7 +3,7 @@
 Generate translation candidates and select the final hypothesis by reranking.
 
 This script covers inference-time combinations:
-  candidate-mode = sample | rag | mixed (mixed = read flat candidates, see --from-flat-candidates-jsonl)
+  candidate-mode = sample | rag | manyshot | mixed (mixed = read flat candidates, see --from-flat-candidates-jsonl)
   reranker       = llm | comet-qe
 
 Examples:
@@ -21,6 +21,14 @@ Examples:
     --base-url "$OPENAI_API_BASE" --api-key "$OPENAI_API_KEY" \
     --model qwen3-8b --model-family qwen --model-tag qwen3_8b_rag_cometqe
 
+  # Many-shot ICL: random exemplars from augmented pair JSONL (default 100), translate last
+  conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
+    --candidate-mode manyshot --reranker llm \
+    --aug-data-dir training/data/multilingual/fineweb2_synth \
+    --manyshot-k 100 --manyshot-seed 42 \
+    --base-url "$OPENAI_API_BASE" --api-key "$OPENAI_API_KEY" \
+    --model qwen3-8b --model-family qwen --model-tag qwen3_8b_manyshot_llm
+
   # Rerank only from mix_hypothesis_candidates.py output (combined sample+RAG flats)
   conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
     --from-flat-candidates-jsonl eval_multilingual/my_mix/run_001/candidates.jsonl \
@@ -30,8 +38,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -296,6 +306,108 @@ def rag_user_content(src_lang: str, tgt_lang: str, source_text: str, example: Ex
     )
 
 
+def manyshot_user_content(
+    src_lang: str,
+    tgt_lang: str,
+    source_text: str,
+    demonstrations: list[Example],
+) -> str:
+    """构建 many-shot ICL 用户消息：前文为若干参考译文对，最后单独给出待译源句。"""
+    body: list[str] = [
+        eval_common.english_translation_instruction(src_lang, tgt_lang),
+        "",
+        "The following are reference translation pairs (source and target). "
+        "They are examples only; do not output them again.",
+        "After the examples, translate only the final source sentence.",
+        "",
+    ]
+    for j, ex in enumerate(demonstrations, start=1):
+        body.append(f"Example {j} — Source:\n{ex.src}\n\nExample {j} — Translation:\n{ex.tgt}\n")
+    body.extend(
+        [
+            "---",
+            "Final source to translate (output only this translation, no numbering or commentary):",
+            source_text.strip(),
+        ]
+    )
+    return "\n".join(body)
+
+
+def _manyshot_rng(item: dict[str, Any], candidate_idx: int, base_seed: int) -> random.Random:
+    key = "|".join(str(x) for x in eval_common.result_key(item))
+    blob = f"{base_seed}|{key}|{candidate_idx}".encode("utf-8")
+    digest = int(hashlib.sha256(blob).hexdigest()[:16], 16)
+    return random.Random(digest)
+
+
+def manyshot_candidates(
+    client: OpenAI,
+    item: dict[str, Any],
+    pool: list[Example],
+    *,
+    model: str,
+    model_family: str,
+    max_tokens: int,
+    num_candidates: int,
+    temperature: float,
+    icl_k: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """从 pool 中无放回随机抽 icl_k 条作为 ICL，每条评测样本可生成多个候选（各自重新抽样）。"""
+    src_clean = (item.get("source_text") or "").strip()
+    pool_f = [e for e in pool if e.src.strip() != src_clean]
+    if not pool_f and pool:
+        pool_f = list(pool)
+    if not pool_f:
+        raise RuntimeError(f"manyshot: empty pool for pair={pair_from_item(item)} sample_id={item.get('sample_id')}")
+    k_take = min(int(icl_k), len(pool_f))
+    out: list[dict[str, Any]] = []
+    for i in range(num_candidates):
+        rng = _manyshot_rng(item, i, seed)
+        sampled = rng.sample(pool_f, k_take)
+        user_content = manyshot_user_content(item["src_lang"], item["tgt_lang"], item["source_text"], sampled)
+        temp = float(temperature) if num_candidates > 1 else 0.0
+        messages = [
+            {"role": "system", "content": "You are a professional machine translation engine."},
+            {"role": "user", "content": user_content},
+        ]
+        try:
+            texts = chat_text(
+                client,
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                model_family=model_family,
+                temperature=temp,
+                n=1,
+            )
+        except Exception:
+            texts = []
+        hyp = re.sub(r"\s+", " ", (texts[0] if texts else "").strip())
+        out.append(
+            {
+                "candidate_id": i,
+                "hypothesis": hyp,
+                "candidate_source": "manyshot",
+                "manyshot_k": k_take,
+                "manyshot_pool_size": len(pool),
+                "manyshot_pool_usable": len(pool_f),
+            }
+        )
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for cand in out:
+        hyp = re.sub(r"\s+", " ", str(cand["hypothesis"]).strip())
+        if hyp and hyp not in seen:
+            seen.add(hyp)
+            cand["hypothesis"] = hyp
+            cand["candidate_id"] = len(deduped)
+            deduped.append(cand)
+    if not deduped:
+        raise RuntimeError(f"manyshot: no hypotheses for {pair_from_item(item)} sample_id={item.get('sample_id')}")
+    return deduped
+
+
 def rag_candidates(
     client: OpenAI,
     item: dict[str, Any],
@@ -503,9 +615,9 @@ def main() -> int:
     parser.add_argument("--model-family", default=os.environ.get("EVAL_MODEL_FAMILY", "qwen"))
     parser.add_argument(
         "--candidate-mode",
-        choices=["sample", "rag", "mixed"],
+        choices=["sample", "rag", "manyshot", "mixed"],
         default=None,
-        help="mixed 通常在提供 --from-flat-candidates-jsonl 时使用（或未指定时将由该选项自动设为 mixed）。",
+        help="mixed 通常在提供 --from-flat-candidates-jsonl 时使用（或未指定时将由该选项自动设为 mixed）。manyshot：从增强 JSONL 随机抽若干条作 ICL。",
     )
     parser.add_argument("--reranker", choices=["llm", "comet-qe"], required=True)
     parser.add_argument("--num-candidates", type=int, default=5)
@@ -516,6 +628,19 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--aug-data-dir", type=Path, default=eval_common.root() / "training" / "data" / "multilingual" / "fineweb2_synth")
     parser.add_argument("--aug-file-template", default="fineweb_synth_{src}__{tgt}.jsonl")
+    parser.add_argument("--manyshot-k", type=int, default=100, help="many-shot ICL 随机抽取的参考句对数量（默认 100）。")
+    parser.add_argument(
+        "--manyshot-seed",
+        type=int,
+        default=42,
+        help="与样本键、候选序号组合后决定每次无放回抽样，可复现。",
+    )
+    parser.add_argument(
+        "--manyshot-pool-max-rows",
+        type=int,
+        default=0,
+        help="每条语向增强 JSONL 最多加载多少行进入抽样池，0 表示全部加载（大文件请慎用内存）。",
+    )
     parser.add_argument("--rag-index-dir", type=Path, default=eval_common.root() / "indexes" / "faiss_aug_fineweb")
     parser.add_argument("--build-rag-index-on-the-fly", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--rag-index-limit", type=int, default=0, help="Optional max augmented examples per pair.")
@@ -537,7 +662,7 @@ def main() -> int:
     elif args.candidate_mode == "mixed":
         raise SystemExit("--candidate-mode mixed 仅支持与 --from-flat-candidates-jsonl 一起使用")
     elif args.candidate_mode is None:
-        raise SystemExit("请指定 --candidate-mode（sample|rag），或传入 --from-flat-candidates-jsonl")
+        raise SystemExit("请指定 --candidate-mode（sample|rag|manyshot），或传入 --from-flat-candidates-jsonl")
 
     eval_common.quiet_http_logging()
     eval_cfg = eval_common.load_json(args.eval_config)
@@ -561,6 +686,20 @@ def main() -> int:
     if args.base_url:
         client_kwargs["base_url"] = args.base_url
     client = OpenAI(**client_kwargs)
+
+    manyshot_pools: dict[str, list[Example]] = {}
+    if args.candidate_mode == "manyshot" and not args.from_flat_candidates_jsonl:
+        by_pair: dict[str, tuple[str, str]] = {}
+        for it in items:
+            by_pair[pair_from_item(it)] = (it["src_lang"], it["tgt_lang"])
+        pool_limit = int(args.manyshot_pool_max_rows) if args.manyshot_pool_max_rows and args.manyshot_pool_max_rows > 0 else 0
+        for pair, (src, tgt) in sorted(by_pair.items()):
+            path = args.aug_data_dir / args.aug_file_template.format(src=src, tgt=tgt)
+            pool = load_pair_examples(path, limit=pool_limit)
+            if not pool:
+                raise SystemExit(f"manyshot: 无可用增强数据 {path}")
+            print(f"manyshot pool for {pair}: {path} rows={len(pool)}", file=sys.stderr)
+            manyshot_pools[pair] = pool
 
     retrievers: dict[str, FaissRetriever] = {}
     if args.candidate_mode == "rag" and not args.from_flat_candidates_jsonl:
@@ -597,6 +736,21 @@ def main() -> int:
                 max_tokens=max_tokens,
                 num_candidates=args.num_candidates,
                 temperature=args.sample_temperature,
+            )
+        elif args.candidate_mode == "manyshot":
+            pair = pair_from_item(it)
+            pool = manyshot_pools[pair]
+            cands = manyshot_candidates(
+                client,
+                it,
+                pool,
+                model=args.model,
+                model_family=args.model_family,
+                max_tokens=max_tokens,
+                num_candidates=args.num_candidates,
+                temperature=args.sample_temperature,
+                icl_k=args.manyshot_k,
+                seed=args.manyshot_seed,
             )
         else:
             pair = pair_from_item(it)
@@ -732,6 +886,11 @@ def main() -> int:
         "aug_data_dir": str(args.aug_data_dir),
         "rag_index_dir": str(args.rag_index_dir) if args.candidate_mode == "rag" else None,
         "embedding_model": args.embedding_model if args.candidate_mode == "rag" and not args.from_flat_candidates_jsonl else None,
+        "manyshot_k": args.manyshot_k if args.candidate_mode == "manyshot" and not args.from_flat_candidates_jsonl else None,
+        "manyshot_seed": args.manyshot_seed if args.candidate_mode == "manyshot" and not args.from_flat_candidates_jsonl else None,
+        "manyshot_pool_max_rows": int(args.manyshot_pool_max_rows)
+        if args.candidate_mode == "manyshot" and not args.from_flat_candidates_jsonl
+        else None,
         "from_flat_candidates_jsonl": str(args.from_flat_candidates_jsonl.resolve()) if args.from_flat_candidates_jsonl else None,
         "comet_qe_model": args.comet_qe_model if args.reranker == "comet-qe" else None,
     }
