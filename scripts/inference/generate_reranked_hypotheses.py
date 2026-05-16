@@ -364,7 +364,17 @@ def manyshot_candidates(
         raise RuntimeError(f"manyshot: empty pool for pair={pair_from_item(item)} sample_id={item.get('sample_id')}")
     k_take = min(int(icl_k), len(pool_f))
     out: list[dict[str, Any]] = []
-    for i in range(num_candidates):
+    iter_range: Any = range(num_candidates)
+    if num_candidates > 1:
+        iter_range = tqdm(
+            range(num_candidates),
+            desc="manyshot-subcalls",
+            leave=False,
+            unit="call",
+            file=sys.stderr,
+            mininterval=0.2,
+        )
+    for i in iter_range:
         rng = _manyshot_rng(item, i, seed)
         sampled = rng.sample(pool_f, k_take)
         user_content = manyshot_user_content(item["src_lang"], item["tgt_lang"], item["source_text"], sampled)
@@ -792,10 +802,22 @@ def main() -> int:
         candidate_rows = candidate_rows_from_flat_jsonl(args.from_flat_candidates_jsonl, items)
     else:
         candidate_rows_unordered: list[dict[str, Any]] = []
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futs = [ex.submit(make_candidates, it) for it in items]
-            for fut in tqdm(as_completed(futs), total=len(futs), desc=f"generate-{args.candidate_mode}"):
-                candidate_rows_unordered.append(fut.result())
+        # manyshot：单条样本内多次长上下文请求，若用线程池 + as_completed，要整条样本跑完外层才 +1，
+        # 且首个样本往往极慢，进度条会长时间停在 0。改为顺序执行，并配合 manyshot_candidates 内子进度条。
+        if args.candidate_mode == "manyshot":
+            for it in tqdm(items, desc="generate-manyshot", file=sys.stderr, mininterval=0.3):
+                candidate_rows_unordered.append(make_candidates(it))
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futs = [ex.submit(make_candidates, it) for it in items]
+                for fut in tqdm(
+                    as_completed(futs),
+                    total=len(futs),
+                    desc=f"generate-{args.candidate_mode}",
+                    file=sys.stderr,
+                    mininterval=0.3,
+                ):
+                    candidate_rows_unordered.append(fut.result())
         by_key = {eval_common.result_key(r): r for r in candidate_rows_unordered}
         candidate_rows = [by_key[eval_common.result_key(it)] for it in items]
 
@@ -824,7 +846,13 @@ def main() -> int:
 
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futs = [ex.submit(rerank_one, row) for row in candidate_rows]
-            for fut in tqdm(as_completed(futs), total=len(futs), desc="rerank-llm"):
+            for fut in tqdm(
+                as_completed(futs),
+                total=len(futs),
+                desc="rerank-llm",
+                file=sys.stderr,
+                mininterval=0.3,
+            ):
                 key, idx, raw = fut.result()
                 selected[key] = (idx, raw, None)
     else:
