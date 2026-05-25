@@ -369,32 +369,49 @@ def write_outputs(out_dir: Path, per_sample: list[SampleOracleRow], summary: dic
         "# Oracle BLEU vs System BLEU",
         "",
         f"- Samples: **{summary['n_samples']}**",
+        f"- Language pairs: **{summary['n_pairs']}**",
         f"- System source: `{summary['system_source']}`",
         f"- BLEU tokenize policy: `{summary['bleu_tokenize_policy']}`",
         "",
-        "## Weighted by sentence count over language pairs",
+        "## By language pair",
         "",
-        f"| | BLEU |",
-        f"|--|--:|",
-        f"| System | {summary['corpus_bleu_system_weighted_by_pair']:.2f} |",
-        f"| Oracle (upper bound) | {summary['corpus_bleu_oracle_weighted_by_pair']:.2f} |",
-        f"| Gap (Oracle − System) | {summary['oracle_gap_weighted_by_pair']:.2f} |",
-        "",
-        "## Macro average over language pairs",
-        "",
-        f"| | BLEU |",
-        f"|--|--:|",
-        f"| System | {summary['corpus_bleu_system_macro_avg_by_pair']:.2f} |",
-        f"| Oracle | {summary['corpus_bleu_oracle_macro_avg_by_pair']:.2f} |",
-        f"| Gap | {summary['oracle_gap_macro_avg_by_pair']:.2f} |",
-        "",
-        f"- Mean per-sentence BLEU gain (oracle pick − system): **{summary['mean_sent_bleu_gain']:.4f}**",
-        f"- Oracle win rate (sent BLEU strictly better): **{100 * summary['oracle_win_rate']:.1f}%**",
-        "",
-        summary.get("note", ""),
-        "",
-        "See `oracle_bleu_by_pair.csv` and `oracle_bleu_per_sentence.csv`.",
+        "| Corpus | Pair | N | System | Oracle | Gap | Mean Δ sent | Oracle win % | tokenize |",
+        "|---|---|--:|--:|--:|--:|--:|--:|---|",
     ]
+    for r in summary["by_pair"]:
+        md_lines.append(
+            f"| {r['corpus']} | {r['pair']} | {r['n']} | "
+            f"{r['corpus_bleu_system']:.2f} | {r['corpus_bleu_oracle']:.2f} | {r['oracle_gap']:.2f} | "
+            f"{r['mean_sent_bleu_gain']:.3f} | {100 * r['oracle_win_rate']:.1f} | {r['bleu_tokenize_system']} |"
+        )
+
+    md_lines.extend(
+        [
+            "",
+            "## Weighted by sentence count over language pairs",
+            "",
+            "| | BLEU |",
+            "|--|--:|",
+            f"| System | {summary['corpus_bleu_system_weighted_by_pair']:.2f} |",
+            f"| Oracle (upper bound) | {summary['corpus_bleu_oracle_weighted_by_pair']:.2f} |",
+            f"| Gap (Oracle − System) | {summary['oracle_gap_weighted_by_pair']:.2f} |",
+            "",
+            "## Macro average over language pairs",
+            "",
+            "| | BLEU |",
+            "|--|--:|",
+            f"| System | {summary['corpus_bleu_system_macro_avg_by_pair']:.2f} |",
+            f"| Oracle | {summary['corpus_bleu_oracle_macro_avg_by_pair']:.2f} |",
+            f"| Gap | {summary['oracle_gap_macro_avg_by_pair']:.2f} |",
+            "",
+            f"- Mean per-sentence BLEU gain (oracle pick − system): **{summary['mean_sent_bleu_gain']:.4f}**",
+            f"- Oracle win rate (sent BLEU strictly better): **{100 * summary['oracle_win_rate']:.1f}%**",
+            "",
+            summary.get("note", ""),
+            "",
+            "See `oracle_bleu_by_pair.csv` and `oracle_bleu_per_sentence.csv`.",
+        ]
+    )
     (out_dir / "oracle_bleu_report.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
 

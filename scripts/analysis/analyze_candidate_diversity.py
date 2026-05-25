@@ -288,13 +288,42 @@ def write_report(path: Path, summary: dict[str, Any], orders: list[int]) -> None
         "# Candidate diversity (Distinct-n & repetition)",
         "",
         f"- Samples: **{g.get('n_samples', 0)}**",
+        f"- Language pairs: **{len(summary.get('by_pair', []))}**",
         f"- Mean candidates per sample: **{g.get('mean_n_candidates', 0)}**",
         "",
-        "## Metrics (macro mean over samples)",
+        "## By language pair",
         "",
-        "| n | Distinct (pooled) | Repetition (pooled) | Distinct (per cand) | Repetition (per cand) | Pairwise Jaccard dist |",
-        "|--:|--:|--:|--:|--:|--:|",
     ]
+    pair_rows = summary.get("by_pair", [])
+    for n in orders:
+        lines.extend(
+            [
+                f"### n = {n}",
+                "",
+                "| Corpus | Pair | N | Distinct (pooled) | Repetition (pooled) | Distinct (per cand) | Repetition (per cand) | Pairwise Jaccard dist | Mean unique texts |",
+                "|---|---|--:|--:|--:|--:|--:|--:|--:|",
+            ]
+        )
+        for r in pair_rows:
+            lines.append(
+                f"| {r['corpus']} | {r['pair']} | {r['n_samples']} | "
+                f"{r.get(f'distinct_n_pooled_n{n}', 0):.4f} | "
+                f"{r.get(f'repetition_rate_pooled_n{n}', 0):.4f} | "
+                f"{r.get(f'distinct_n_mean_per_cand_n{n}', 0):.4f} | "
+                f"{r.get(f'repetition_rate_mean_per_cand_n{n}', 0):.4f} | "
+                f"{r.get(f'pairwise_jaccard_distinct_mean_n{n}', 0):.4f} | "
+                f"{r.get('mean_n_unique_texts', 0):.2f} |"
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Overall (macro mean over samples)",
+            "",
+            "| n | Distinct (pooled) | Repetition (pooled) | Distinct (per cand) | Repetition (per cand) | Pairwise Jaccard dist |",
+            "|--:|--:|--:|--:|--:|--:|",
+        ]
+    )
     for n in orders:
         lines.append(
             f"| {n} | {g.get(f'mean_distinct_n_pooled_n{n}', 0):.4f} | "
