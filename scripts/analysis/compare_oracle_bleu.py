@@ -391,7 +391,7 @@ def write_outputs(out_dir: Path, per_sample: list[SampleOracleRow], summary: dic
         f"- Mean per-sentence BLEU gain (oracle pick − system): **{summary['mean_sent_bleu_gain']:.4f}**",
         f"- Oracle win rate (sent BLEU strictly better): **{100 * summary['oracle_win_rate']:.1f}%**",
         "",
-        summary["note_pooled"],
+        summary.get("note", ""),
         "",
         "See `oracle_bleu_by_pair.csv` and `oracle_bleu_per_sentence.csv`.",
     ]
