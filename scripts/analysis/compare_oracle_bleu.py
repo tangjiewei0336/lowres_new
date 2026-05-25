@@ -28,6 +28,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    from tqdm import tqdm  # type: ignore
+except Exception:  # pragma: no cover
+    def tqdm(x, **kwargs):  # type: ignore
+        return x
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 RUN_DIR = SCRIPT_DIR.parent / "run"
 if str(RUN_DIR) not in sys.path:
@@ -58,6 +64,27 @@ def _candidate_sort_key(row: dict[str, Any]) -> int:
         return 0
 
 
+_SPM_CACHE: dict[str, Any] = {}
+
+
+def _get_spm_processor(spm_model: Path) -> Any:
+    key = str(spm_model.resolve())
+    proc = _SPM_CACHE.get(key)
+    if proc is not None:
+        return proc
+    import sentencepiece as spm
+
+    proc = spm.SentencePieceProcessor()
+    proc.Load(str(spm_model))
+    _SPM_CACHE[key] = proc
+    return proc
+
+
+def _spm_encode(text: str, spm_model: Path) -> str:
+    proc = _get_spm_processor(spm_model)
+    return " ".join(proc.EncodeAsPieces((text or "").strip()))
+
+
 def sentence_bleu(
     hyp: str,
     ref: str,
@@ -70,17 +97,15 @@ def sentence_bleu(
     import sacrebleu
 
     tok = eval_common.sacrebleu_tokenize_for_group(eval_corpus, eval_pair, policy)
-    hyps = [hyp or ""]
-    refs = [ref or ""]
     if tok == eval_common._THAI_SACREbleu_TOK:
-        hyps = eval_common._segment_thai_pythai_words(hyps)
-        refs = eval_common._segment_thai_pythai_words(refs)
-        return float(sacrebleu.sentence_bleu(hyps[0], [refs[0]], tokenize="none").score)
+        h = eval_common._segment_thai_pythai_words([hyp or ""])[0]
+        r = eval_common._segment_thai_pythai_words([ref or ""])[0]
+        return float(sacrebleu.sentence_bleu(h, [r], tokenize="none").score)
     if tok == "flores200" and flores200_spm and flores200_spm.is_file():
-        hyps = eval_common._segment_flores200_spm(hyps, flores200_spm)
-        refs = eval_common._segment_flores200_spm(refs, flores200_spm)
-        return float(sacrebleu.sentence_bleu(hyps[0], [refs[0]], tokenize="none").score)
-    return float(sacrebleu.sentence_bleu(hyps[0], [refs[0]], tokenize=tok).score)
+        h = _spm_encode(hyp or "", flores200_spm)
+        r = _spm_encode(ref or "", flores200_spm)
+        return float(sacrebleu.sentence_bleu(h, [r], tokenize="none").score)
+    return float(sacrebleu.sentence_bleu(hyp or "", [ref or ""], tokenize=tok).score)
 
 
 @dataclass
@@ -151,7 +176,7 @@ def analyze(
     bucket_hyps_orc: dict[tuple[str, str], list[str]] = defaultdict(list)
     bucket_refs: dict[tuple[str, str], list[str]] = defaultdict(list)
 
-    for key, cands in sorted(groups.items()):
+    for key, cands in tqdm(sorted(groups.items()), desc="sentence-bleu", unit="sample"):
         if not cands:
             continue
         base = cands[0]
