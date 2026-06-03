@@ -12,7 +12,7 @@ set -euo pipefail
 #   bash scripts/inference/run_all_rerank_combinations.sh qwen3-8b qwen qwen3_8b_rerank
 #
 # Build the RAG FAISS index once before running rag combinations:
-#   conda run -n lowres python scripts/inference/build_faiss_rag_index.py \
+#   python scripts/inference/build_faiss_rag_index.py \
 #     --aug-data-dir training/data/multilingual/fineweb2_synth \
 #     --out-dir indexes/faiss_aug_fineweb
 
@@ -33,7 +33,7 @@ for candidate_mode in sample rag; do
   for reranker in llm comet-qe; do
     tag="${TAG_PREFIX}_${candidate_mode}_${reranker}"
     echo "=== ${candidate_mode} + ${reranker} -> ${tag} ==="
-    conda run -n lowres python scripts/inference/generate_reranked_hypotheses.py \
+    python scripts/inference/generate_reranked_hypotheses.py \
       "${COMMON_ARGS[@]}" \
       --candidate-mode "${candidate_mode}" \
       --reranker "${reranker}" \

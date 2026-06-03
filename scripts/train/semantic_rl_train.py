@@ -11,7 +11,6 @@ Reward modes:
   - both:       weighted sum of the above
 
 Example (zh->en, align + fluency, mixed with SFT):
-  conda activate lowres
   python scripts/train/semantic_rl_train.py \\
     --model-path models/Qwen3-8B_latest \\
     --data training/data/multilingual/nllb/nllb_mt_zho_Hans__eng_Latn.jsonl \\

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # 在仓库根目录：bash scripts/check_all.sh
-# 使用 conda 环境 lowres（请先: conda create -n lowres python=3.12 && conda activate lowres && pip install -r requirements.txt）
+# 请先安装依赖: uv sync 或 pip install -r requirements.txt
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=activate_conda_lowres.sh
-source "${SCRIPT_DIR}/activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"

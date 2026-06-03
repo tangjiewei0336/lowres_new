@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Pair-level LoRA MoE 整体评测：请先手动启动对应 vLLM 服务，再执行本脚本。
-# 使用 conda 环境 lowres。
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../activate_conda_lowres.sh
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT}"
 

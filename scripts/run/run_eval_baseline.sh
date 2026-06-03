@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # 基座模型评估：请先手动启动对应 vLLM 服务，再执行本脚本。
-# 使用 conda 环境 lowres。
+
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=activate_conda_lowres.sh
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT}"
 

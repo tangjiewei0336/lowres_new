@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 依次对每个合并模型目录启动 vLLM，并仅生成 hypotheses（不跑 BLEU/COMET）。
-# 请在可运行 vllm 与 run_eval 依赖的环境中执行（例如 conda activate lowres-serve / lowres）。
+# 请在已安装 vllm 与 run_eval 依赖的环境中执行（例如 uv run 或激活 .venv）。
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"

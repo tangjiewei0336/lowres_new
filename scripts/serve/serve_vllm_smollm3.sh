@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# conda env lowres；vLLM 需单独安装: pip install vllm
+# vLLM 需单独安装: pip install vllm
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../activate_conda_lowres.sh
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-lowres-serve}"
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"
 

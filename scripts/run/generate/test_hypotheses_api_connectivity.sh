@@ -4,8 +4,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../activate_conda_lowres.sh
-source "${SCRIPT_DIR}/../../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${ROOT}"
 # shellcheck source=./load_dotenv.sh

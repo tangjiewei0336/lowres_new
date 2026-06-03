@@ -2,8 +2,7 @@
 # Semantic-reward translation fine-tuning launcher.
 #
 # Prerequisites:
-#   conda activate lowres
-#   pip install -r requirements.txt
+#   uv sync 或 pip install -r requirements.txt
 #   Prepare data, e.g.:
 #     python scripts/prepare/prepare_nllb_for_llamafactory.py \\
 #       --export-from-config --pairs-config training/ccmatrix_pair_limits.json

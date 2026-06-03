@@ -2,9 +2,6 @@
 # Qwen3：关闭「思考/推理」模式（与非 Qwen 基座评测对齐，仅输出译文）。
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../activate_conda_lowres.sh
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-lowres-serve}"
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"
 

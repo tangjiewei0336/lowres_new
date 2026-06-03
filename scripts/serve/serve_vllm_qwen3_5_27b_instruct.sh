@@ -3,9 +3,6 @@
 # 默认关闭 thinking，作为翻译/指令模型部署。
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../activate_conda_lowres.sh
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-lowres-serve}"
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"
 

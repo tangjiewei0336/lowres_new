@@ -3,8 +3,6 @@
 # 仅非思考模式；可与基座评测脚本共用 run_eval.py 的 qwen3 族逻辑。
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-lowres-serve}"
-source "${SCRIPT_DIR}/../activate_conda_lowres.sh"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-${ROOT}/datasets/cache/modelscope}"
 
