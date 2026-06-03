@@ -45,10 +45,30 @@ if str(RUN_DIR) not in sys.path:
 import run_eval as eval_common  # noqa: E402
 
 # 与 scripts/prepare/filter_augmented_mt_by_qe_stats.py 对齐
+# 注意：原泰文片段 [\u0e00-\u0e7f]+ 会把整段连续泰文当 1 个 token，导致英→泰长度比严重偏小，
+# 所有候选会被默认 [min_len_ratio, max_len_ratio] 砍光后触发 fallback 只剩 1 条。
+# 这里改成：泰文段先用 pythainlp.word_tokenize 切，再让非泰文按下面正则匹配。
+_THAI_RE = re.compile(r"[\u0e00-\u0e7f]+")
 TOKEN_RE = re.compile(
-    r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]|[\u0e00-\u0e7f]+|[A-Za-zÀ-ỹ]+(?:[-'][A-Za-zÀ-ỹ]+)?|\d+(?:[.,]\d+)*",
+    r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]|[A-Za-zÀ-ỹ]+(?:[-'][A-Za-zÀ-ỹ]+)?|\d+(?:[.,]\d+)*",
     re.UNICODE,
 )
+
+_THAI_WORD_TOKENIZE = None
+
+
+def _thai_word_tokenize(text: str) -> list[str]:
+    """惰性加载 pythainlp 并按 newmm 引擎切词，过滤空白。"""
+    global _THAI_WORD_TOKENIZE
+    if _THAI_WORD_TOKENIZE is None:
+        try:
+            from pythainlp.tokenize import word_tokenize as _wt
+        except ImportError as e:  # pragma: no cover
+            raise RuntimeError(
+                "泰语长度比统计需要 PyThaiNLP：在当前 conda 环境内 pip install pythainlp"
+            ) from e
+        _THAI_WORD_TOKENIZE = _wt
+    return [t for t in _THAI_WORD_TOKENIZE(text, engine="newmm") if t and not t.isspace()]
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -69,7 +89,23 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def token_len(text: str) -> int:
-    return len(TOKEN_RE.findall(text or ""))
+    s = text or ""
+    if not s:
+        return 0
+    # 不含泰文：原有正则即可
+    if not _THAI_RE.search(s):
+        return len(TOKEN_RE.findall(s))
+    # 含泰文：把泰文段抠出来交给 pythainlp，剩余部分用 TOKEN_RE 计数
+    count = 0
+    last = 0
+    for m in _THAI_RE.finditer(s):
+        if m.start() > last:
+            count += len(TOKEN_RE.findall(s[last : m.start()]))
+        count += len(_thai_word_tokenize(m.group(0)))
+        last = m.end()
+    if last < len(s):
+        count += len(TOKEN_RE.findall(s[last:]))
+    return count
 
 
 def len_ratio(source_text: str, hypothesis: str) -> float:

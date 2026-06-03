@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from itertools import product
 from pathlib import Path
 from typing import Any, Iterator
@@ -53,6 +54,14 @@ def norm_id_col(row: dict[str, Any]) -> str:
         if v is not None:
             return str(v)
     return ""
+
+
+def flores_modelscope_split(config_split: str) -> str:
+    """
+    evaluation_config.json 里的 split 与 ModelScope facebook/flores 的 split 名称对齐。
+    FLORES 通常只有 dev / devtest，没有名为 test 的划分；评测常用的「test」对应 hub 的 devtest。
+    """
+    return {"test": "devtest"}.get(config_split, config_split)
 
 
 def load_flores_lang_table(dataset_id: str, lang: str, split: str) -> dict[str, str]:
@@ -229,10 +238,18 @@ def main() -> int:
     pairs = expand_pairs(groups, bidir)
     langs = sorted({x for group in groups for x in group})
 
+    ms_flores_split = flores_modelscope_split(split)
+    if ms_flores_split != split:
+        print(
+            f"提示: evaluation_config split={split!r} 在 FLORES 上将使用 ModelScope split={ms_flores_split!r} 下载数据；"
+            f"写出文件名仍为 flores_{split}_*.jsonl。",
+            file=sys.stderr,
+        )
+
     print("加载 FLORES 各语言表:", langs)
     flores_tables: dict[str, dict[str, str]] = {}
     for lang in langs:
-        flores_tables[lang] = load_flores_lang_table(flores_id, lang, split)
+        flores_tables[lang] = load_flores_lang_table(flores_id, lang, ms_flores_split)
         print(f"  {lang}: {len(flores_tables[lang])} 条")
 
     for src, tgt in pairs:
